@@ -27,9 +27,11 @@ def solve_lp_files_gurobi(directory: str, num_problems: int, agg_num: int, delet
     # 限制读取的文件数量
     lp_files = lp_files[:num_problems]
 
+    # 生成乘子
     primes = gen_primes(agg_num)
-    u_list = [math.log(p) for p in primes]
-
+    # u_list = [math.log(p) for p in primes]
+    u_list = primes
+    # todo:现在对于等式约束的指派问题也没用，是出问题了？
     results = []
 
     # 依次读取并求解每个 .lp 文件
@@ -118,17 +120,18 @@ def solve_lp_files_gurobi(directory: str, num_problems: int, agg_num: int, delet
     return df
 
 if __name__ == '__main__':
-    data_dir = "CA_200_400"
+    data_dir = "assignment_lp"
     lp_files_dir = f"./instance/test/{data_dir}"
     solve_num = 50
-    agg_num = 15
+    agg_num = 100
     delete_con = True
     result_dir = f"./result/{data_dir}_agg_num_{agg_num}_delete_con_{str(delete_con)}"
     # 第一个是20的约束
     # 第二个490，取100吧
 
 
-    seed_list = [1,2,3,4,5,6,7,8,9,10]
+    # seed_list = [1,2,3,4,5,6,7,8,9,10]
+    seed_list = [1]
     all_runs = []
     gurobi_solve = True
     os.makedirs(result_dir, exist_ok=True)

@@ -21,40 +21,120 @@ def gen_primes(n):
         num += 1
     return primes
 
-def solve_lp_files_gurobi(directory: str, num_problems: int):
-    # 获取目录下所有的 .lp 文件
-    lp_files = [f for f in os.listdir(directory) if f.endswith('.lp')]
-    lp_files.sort()  # 按文件名排序，确保顺序一致
+def solve_lp_files_gurobi(directory: str, num_problems: int, agg_num: int):
+    lp_files = sorted([f for f in os.listdir(directory) if f.endswith('.lp')])[:num_problems]
+    primes = gen_primes(agg_num)
+    u_list = [math.log(p) for p in primes]
 
-    # 限制读取的文件数量
-    lp_files = lp_files[:num_problems]
+    results = []
 
-    # 依次读取并求解每个 .lp 文件
     for lp_file in lp_files:
         lp_path = os.path.join(directory, lp_file)
+        print(f"Processing {lp_file}")
 
-        try:
-            # 创建 Gurobi 模型
-            model = gp.read(lp_path)
+        # 原问题
+        model_orig = Model()
+        model_orig.read(lp_path)
+        t0 = time.perf_counter()
+        model_orig.optimize()
+        t1 = time.perf_counter()
+        status_orig = model_orig.Status
+        obj_orig = model_orig.ObjVal
+        time_orig = t1 - t0
 
-            # 求解模型
-            model.optimize()
+        # 聚合问题
+        model_agg = Model()
+        model_agg.read(lp_path)
+        t2 = time.perf_counter()
 
-            # 获取求解状态
-            status = model.Status
+        conss = model_agg.getConstrs()
+        original_cons_num = len(conss)
+        sample = random.sample(conss, min(agg_num, len(conss)))
 
-            # 获取目标值
-            objective_value = model.ObjVal if status == GRB.OPTIMAL else None
+        agg_coeffs = {}
+        agg_rhs = 0.0
 
-            # 输出结果
-            print(f"文件: {lp_file}")
-            print(f"求解状态: {status}")
-            print(f"目标值: {objective_value}")
-            print("-" * 40)
+        for idx, cons in enumerate(sample):
+            u = u_list[idx]
+            constr_expr = model_agg.getRow(cons)
+            for j in range(constr_expr.size()):
+                var = constr_expr.getVar(j)
+                coef = constr_expr.getCoeff(j)
+                agg_coeffs[var.VarName] = agg_coeffs.get(var.VarName, 0.0) + u * coef
+            agg_rhs += u * cons.RHS
+            model_agg.remove(cons)
 
-        except gp.GurobiError as e:
-            print(f"求解文件 {lp_file} 时出错: {e}")
-            print("-" * 40)
+        model_agg.update()
+
+        # 构造聚合约束
+        expr = 0
+        for var_name, coef in agg_coeffs.items():
+            var = model_agg.getVarByName(var_name)
+            expr += coef * var
+        model_agg.addConstr(expr <= agg_rhs, name="agg_constraint")
+        model_agg.update()
+
+        model_agg.optimize()
+        t3 = time.perf_counter()
+        status_agg = model_agg.Status
+        obj_agg = model_agg.ObjVal
+        time_agg = t3 - t2
+        after_agg_cons_num = len(model_agg.getConstrs())
+
+        dual_gap = (obj_agg - obj_orig) / abs(obj_orig) if obj_orig != 0 else float("inf")
+        time_reduce = (time_orig - time_agg) / time_orig if time_orig > 0 else 0
+
+        results.append({
+            "filename": lp_file,
+            "status_orig": status_orig,
+            "status_agg": status_agg,
+            "obj_orig": obj_orig,
+            "obj_agg": obj_agg,
+            "dual_gap": dual_gap,
+            "time_orig": time_orig,
+            "time_agg": time_agg,
+            "time_reduce": time_reduce,
+            "original_cons": original_cons_num,
+            "after_agg_cons": after_agg_cons_num,
+        })
+
+    df = pd.DataFrame(results)
+    return df
+
+
+    # # 获取目录下所有的 .lp 文件
+    # lp_files = [f for f in os.listdir(directory) if f.endswith('.lp')]
+    # lp_files.sort()  # 按文件名排序，确保顺序一致
+    #
+    # # 限制读取的文件数量
+    # lp_files = lp_files[:num_problems]
+    #
+    # # 依次读取并求解每个 .lp 文件
+    # for lp_file in lp_files:
+    #     lp_path = os.path.join(directory, lp_file)
+    #
+    #     try:
+    #         # 创建 Gurobi 模型
+    #         model = gp.read(lp_path)
+    #
+    #         # 求解模型
+    #         model.optimize()
+    #
+    #         # 获取求解状态
+    #         status = model.Status
+    #
+    #         # 获取目标值
+    #         objective_value = model.ObjVal if status == GRB.OPTIMAL else None
+    #
+    #         # 输出结果
+    #         print(f"文件: {lp_file}")
+    #         print(f"求解状态: {status}")
+    #         print(f"目标值: {objective_value}")
+    #         print("-" * 40)
+    #
+    #     except gp.GurobiError as e:
+    #         print(f"求解文件 {lp_file} 时出错: {e}")
+    #         print("-" * 40)
 
 def solve_lp_files_scip(directory: str, num_problems: int, agg_cons_num: int):
     # 列出所有 .lp 文件并排序
@@ -148,13 +228,23 @@ def solve_lp_files_scip(directory: str, num_problems: int, agg_cons_num: int):
 
 
 if __name__ == '__main__':
-    lp_files_dir = "./instance/test/CA"
+    data_dir = "CA_200_400"
+    lp_files_dir = f"./instance/test/{data_dir}"
     solve_num = 50
-    agg_num = 20
+    agg_num = 30
+    result_dir = f"./result/agg_num_{agg_num}"
+    # 第一个是20的约束
+    # 第二个490，取100吧
     seed = random.randint(0,99999)
     random.seed(seed)
-    # solve_lp_files_gurobi(lp_files_dir,solve_num)
-    df = solve_lp_files_scip(lp_files_dir,solve_num,agg_num)
-    df.to_csv(f"surrogate_stats_aggnum_{agg_num}_seed_{seed}.csv", index=False)
+
+    gurobi_solve = True
+    scip_solve = True
+    os.makedirs(result_dir, exist_ok=True)
+    if gurobi_solve:
+        solve_lp_files_gurobi(lp_files_dir, 1, agg_num)
+    if scip_solve:
+        df = solve_lp_files_scip(lp_files_dir, solve_num, agg_num)
+        df.to_csv(result_dir + f"/surrogate_stats_aggnum_{agg_num}_seed_{seed}.csv", index=False)
 
 
