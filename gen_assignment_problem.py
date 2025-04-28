@@ -50,14 +50,29 @@ def generate_assignment_lp_instances(num_instances, sizes, cost_low, cost_high, 
 
     print(f"已生成 {num_instances * len(sizes)} 个 LP 实例，保存在: {output_dir}")
 
+import random
+
+def generate_sizes(size, min_val, max_val):
+    """
+    生成指定大小的随机整数列表，每个整数在指定的上下界之间
+    :param size: 列表的大小
+    :param min_val: 随机整数的最小值
+    :param max_val: 随机整数的最大值
+    :return: 生成的随机整数列表
+    """
+    return [random.randint(min_val, max_val) for _ in range(size)]
 
 # 示例调用
-output_dir = './instance/test/assignment_lp'
+size = 50
+min_val = 200
+max_val = 300
+output_dir = f'./instance/test/assignment_size_{size}_minval_{min_val}_maxval_{max_val}'
 generate_assignment_lp_instances(
-    num_instances=2,
-    sizes=[5, 10],
-    cost_low=1,
-    cost_high=100,
+    num_instances=1, # 每种规模生成的实例数,历史遗留，1即可
+    # num_instances=10, # 每种规模生成的实例数
+    sizes=generate_sizes(size, min_val, max_val), # 一个包含多种矩阵维度的列表
+    cost_low=1, # 成本矩阵随机值的上下界
+    cost_high=500, # 成本矩阵随机值的上下界
     output_dir=output_dir
 )
 

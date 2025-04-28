@@ -91,7 +91,7 @@ class MVCGenerator:
     def __iter__(self):
         return self
 
-def generate_single_instance(n, queue, istrain, size, generator, seed):
+def generate_single_instance(n, queue, istrain, size, generator, seed,post_fix):
     generator.seed(seed)
     while True:
         i = queue.get()
@@ -99,7 +99,7 @@ def generate_single_instance(n, queue, istrain, size, generator, seed):
             break  # No more tasks
 
         instance = next(generator)
-        instance_dir = prefix + f"instance/{istrain}/{size}_600"
+        instance_dir = prefix + f"instance/{istrain}/{size}_{post_fix}"
         os.makedirs(instance_dir, exist_ok=True)
         instance_path = os.path.join(instance_dir, f"{size}_{n + i}.lp")
         instance.write_problem(instance_path)
@@ -107,6 +107,7 @@ def generate_single_instance(n, queue, istrain, size, generator, seed):
 
 
 def generate_instances(num_instances, istrain, size, epoch=0):
+    post_fix = "500_600"
     if size == "CF":
         generator = ecole.instance.CapacitatedFacilityLocationGenerator(50, 100)
     elif size == "IS": # 4000
@@ -121,7 +122,8 @@ def generate_instances(num_instances, istrain, size, epoch=0):
         elif epoch == 1:
             # generator = ecole.instance.CombinatorialAuctionGenerator(2000, 4000)
             # generator = ecole.instance.CombinatorialAuctionGenerator(100, 200)
-            generator = ecole.instance.CombinatorialAuctionGenerator(200, 400)
+            # generator = ecole.instance.CombinatorialAuctionGenerator(500, 700)
+            generator = ecole.instance.CombinatorialAuctionGenerator(500, 600)
             # generator = ecole.instance.CombinatorialAuctionGenerator(500, 1500)
     elif size == "CA_hard":
         if epoch == 0:
@@ -158,7 +160,7 @@ def generate_instances(num_instances, istrain, size, epoch=0):
     for worker_id in range(num_workers):
         seed = base_seed + worker_id
         worker = Process(target=generate_single_instance,
-                         args=(n, task_queue, istrain, size, generator, seed))
+                         args=(n, task_queue, istrain, size, generator, seed,post_fix))
         workers.append(worker)
         worker.start()
 
@@ -177,5 +179,5 @@ if __name__ == '__main__':
         for i in range(3):
             generate_instances(100, "test", "CA", epoch=i)
     else:  # 在下面改需要的，epoch不用管全为1
-        # generate_instances(50, "test", "CA", epoch=1)
-        generate_instances(5, "test", "IS", epoch=1)
+        generate_instances(50, "test", "CA", epoch=1)
+        # generate_instances(5, "test", "IS", epoch=1)

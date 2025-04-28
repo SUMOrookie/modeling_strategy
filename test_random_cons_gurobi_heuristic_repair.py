@@ -9,6 +9,7 @@ import math
 import time
 import random
 import pandas as pd
+import json
 
 def get_a_assignmeng_lp():
     # 利用随机数创建一个成本矩阵cost_matrix
@@ -61,7 +62,7 @@ def gen_primes(n):
         num += 1
     return primes
 
-def solve_lp_files_gurobi(directory: str, num_problems: int, agg_num: int, delete_con:bool, seed:int,problem:str,repair:bool,find_one:bool):
+def solve_lp_files_gurobi(cache:dict,cache_file:str,directory: str, num_problems: int, agg_num: int,seed:int,problem:str,repair:bool,find_one:bool):
     # 获取目录下所有的 .lp 文件
     lp_files = [f for f in os.listdir(directory) if f.endswith('.lp')]
     lp_files.sort()  # 按文件名排序，确保顺序一致
@@ -78,36 +79,60 @@ def solve_lp_files_gurobi(directory: str, num_problems: int, agg_num: int, delet
 
     # 依次读取并求解每个 .lp 文件
     for lp_file in lp_files:
+        # 得到lp路径
         lp_path = os.path.join(directory, lp_file)
         print(f"Processing {lp_file}")
 
+        ## 原问题求解
+        # 如果缓存中已有结果，就直接读取，否则求解并写入缓存
+        if lp_path in cache:
+            print("------------read cache-------------")
+            entry = cache[lp_path]
+            obj_sense = entry['obj_sense']
+            status_orig = entry['status_orig']
+            obj_orig = entry['obj_orig']
+            time_orig = entry['time_orig']
+        else:
+            print("------------there is not cache, solving-------------")
+            # 读入模型
+            model_orig = gp.read(lp_path)
 
-        ## 原问题
-        model_orig = gp.read(lp_path)
-        obj_sense = model_orig.ModelSense
-        # 时间从读入开始算
-        t0 = time.perf_counter()
-        model_orig.optimize()
-        t1 = time.perf_counter()
-        status_orig = model_orig.Status
-        obj_orig = model_orig.ObjVal
-        time_orig = t1 - t0
+            # 时间从读入开始算,求解
+            t0 = time.perf_counter()
+            model_orig.optimize()
+            t1 = time.perf_counter()
 
+            # 指标
+            obj_sense = model_orig.ModelSense
+            status_orig = model_orig.Status
+            obj_orig = model_orig.ObjVal
+            time_orig = t1 - t0
 
-        ## 聚合问题
+            # 写入缓存
+            cache[lp_path] = {
+                'obj_sense':   obj_sense,
+                'status_orig': status_orig,
+                'obj_orig':    obj_orig,
+                'time_orig':   time_orig
+            }
+            with open(cache_file, 'w') as f:
+                json.dump(cache, f, indent=2)
+
+        ## 聚合问题求解
+        # 读入问题
         model_agg = gp.read(lp_path)
         t2 = time.perf_counter()
-        conss = model_agg.getConstrs()
-        cons_num_orig = model_agg.NumConstrs
-        original_cons_num = len(conss)
 
-        # 只能sample出同类型约束
-        # todo
+        # 指标
+        cons_num_orig = model_agg.NumConstrs
+
+        # 只能sample出同类型约束,todo
+        conss = model_agg.getConstrs()
         sample = random.sample(conss, min(agg_num, len(conss)))
 
+        # 计算聚合约束
         agg_coeffs = {}
         agg_rhs = 0.0
-
         for idx, cons in enumerate(sample):
             u = u_list[idx]
             constr_expr = model_agg.getRow(cons)
@@ -116,9 +141,7 @@ def solve_lp_files_gurobi(directory: str, num_problems: int, agg_num: int, delet
                 coef = constr_expr.getCoeff(j)
                 agg_coeffs[var.VarName] = agg_coeffs.get(var.VarName, 0.0) + u * coef
             agg_rhs += u * cons.RHS
-            if delete_con:
-                model_agg.remove(cons)
-
+            model_agg.remove(cons) # 删除约束
         model_agg.update()
 
         # 构造聚合约束
@@ -127,7 +150,7 @@ def solve_lp_files_gurobi(directory: str, num_problems: int, agg_num: int, delet
             var = model_agg.getVarByName(var_name)
             expr += coef * var
 
-        # todo:根据约束类型添加聚合约束
+        # todo:根据约束类型定义符号
         if problem == "assignment":
             model_agg.addConstr(expr == agg_rhs, name="agg_constraint")
         elif problem == "CA":
@@ -135,37 +158,66 @@ def solve_lp_files_gurobi(directory: str, num_problems: int, agg_num: int, delet
         else:
             raise Exception("unknown problem type")
         model_agg.update()
+
+        # 聚合后约束数量
         cons_num_agg = model_agg.NumConstrs
 
-        # todo
+        ## 一些求解的参数 todo
         # model_agg.setParam('SolutionLimit', 1)
-        model_agg.setParam("TimeLimit", 1)
+        model_agg.setParam("TimeLimit", 1) # 求解时间，因为聚合后求解比较快。
         model_agg.optimize()
-        after_agg_cons_num = len(model_agg.getConstrs())
+
+        ## 可行性修复
         if repair:
+            # 获得变量值
             Vars = model_agg.getVars()
-            # vaule_dict = {var.VarName:var.X for var in Vars}
-            vaule_list = [var.X for var in Vars]
+            vaule_dict = {var.VarName:var.X for var in Vars}
+
+            # 读入新模型，用于修复
             repair_model = gp.read(lp_path)
+            conss = repair_model.getConstrs()
+
+            # 启发式修复
+            for constr in conss:
+                N = 0.0 # 约束表达式的值
+                row = repair_model.getRow(constr) # 得到LinExpr
+                var_in_constr = [row.getVar(idx).VarName for idx in range(row.size())] # 获得约束里的变量名
+                var_vaule_one = [] # 保存取值为1的变量名
+                for var_name in var_in_constr:
+                    if var_name in vaule_dict and vaule_dict[var_name] == 1:
+                        N += vaule_dict[var_name]
+                        var_vaule_one.append(var_name)
+
+                # 当约束表达式的值大于1（右端项是1），仅保留一个变量取1，其余取1的变量变为0
+                if N > 1:
+                    fix_num = int(N-1)
+                    for i in range(fix_num):
+                        var_name = var_vaule_one[i]
+                        vaule_dict[var_name] = 0
+
+            # 赋初始值
             repair_Vars = repair_model.getVars()
             for idx in range(len(repair_Vars)):
-                # 感觉用VarHintVal更好
-                repair_Vars[idx].Start = vaule_list[idx]
+                varname = repair_Vars[idx].VarName
+                repair_model.getVarByName(varname).Start = vaule_dict[varname]
                 # repair_Vars[idx].VarHintVal  = vaule_list[idx]
 
+            ## 是否只找到可行解，还是求到最优
             # 找到一个解
-            if find_one:
-                repair_model.setParam('SolutionLimit', 1)
-            else:
-                # 求到最优
-                pass
+            # if find_one:
+            #     repair_model.setParam('SolutionLimit', 1)
+            # else:
+            #     # 求到最优
+            #     pass
 
+            # 求解（修复）,计算指标
             repair_model.optimize()
             t3 = time.perf_counter()
             status_agg = repair_model.Status
             obj_agg = repair_model.ObjVal
             time_agg = t3 - t2
 
+            ## gap、时间约简计算
             if obj_sense == GRB.MINIMIZE:
                 print("最小化问题")
                 primal_gap = (obj_agg - obj_orig) / abs(obj_orig) if obj_orig != 0 else float("inf")
@@ -179,6 +231,7 @@ def solve_lp_files_gurobi(directory: str, num_problems: int, agg_num: int, delet
             print(f"primal_gap:{primal_gap}")
             print(f"time_reduce:{time_reduce}")
 
+            # 保存
             results.append({
                 "filename": lp_file,
                 "status_orig": status_orig,
@@ -192,8 +245,8 @@ def solve_lp_files_gurobi(directory: str, num_problems: int, agg_num: int, delet
                 "time_orig": time_orig,
                 "time_agg": time_agg,
                 "time_reduce": time_reduce,
-                "original_cons": original_cons_num,
-                "after_agg_cons": after_agg_cons_num,
+                "original_cons": cons_num_orig,
+                "after_agg_cons": cons_num_agg,
                 "seed": seed,
             })
         else:
@@ -230,8 +283,8 @@ def solve_lp_files_gurobi(directory: str, num_problems: int, agg_num: int, delet
                 "time_orig": time_orig,
                 "time_agg": time_agg,
                 "time_reduce": time_reduce,
-                "original_cons": original_cons_num,
-                "after_agg_cons": after_agg_cons_num,
+                "original_cons": cons_num_orig,
+                "after_agg_cons": cons_num_agg,
                 "seed": seed,
             })
 
@@ -250,24 +303,34 @@ if __name__ == '__main__':
 
     lp_files_dir = f"./instance/test/{data_dir}"
     solve_num = 10
-    agg_num = 40
-    delete_con = True
-    repair = False
+    agg_num = 50
+
+    repair = True
     find_one = False
-    result_dir = f"./result/{data_dir}_agg_num_{agg_num}_delete_con_{str(delete_con)}_repair_{repair}_find_one_{find_one}"
-    # 第一个是20的约束
-    # 第二个490，取100吧
+    result_dir = f"./result/{data_dir}_agg_num_{agg_num}_heuristic_repair_{repair}_find_one_{find_one}"
 
-
-    # seed_list = [1,2,3,4,5,6]
-    seed_list = [1]
+    seed_list = [1,2,3,4,5]
+    # seed_list = [1]
     all_runs = []
     gurobi_solve = True
     os.makedirs(result_dir, exist_ok=True)
+
+    # 直接求解的缓存：
+    # 假设 lp_files, directory 已经定义
+    os.makedirs("./cache",exist_ok=True)
+    cache_file = f'./cache/{data_dir}_solve_cache.json'
+
+    # 加载缓存（如果存在）
+    if os.path.exists(cache_file):
+        with open(cache_file, 'r') as f:
+            cache = json.load(f)
+    else:
+        cache = {}
+
     for seed in seed_list:
         random.seed(seed)
         if gurobi_solve:
-            df = solve_lp_files_gurobi(lp_files_dir, solve_num, agg_num,delete_con,seed,problem,repair,find_one)
+            df = solve_lp_files_gurobi(cache,cache_file,lp_files_dir, solve_num, agg_num,seed,problem,repair,find_one)
             df.to_csv(result_dir + f"/surrogate_stats_aggnum_{agg_num}_seed_{seed}_repair_{repair}.csv", index=False)
             all_runs.append(df)
 
@@ -292,6 +355,6 @@ if __name__ == '__main__':
     summary.reset_index(inplace=True)
     summary.to_csv(os.path.join(result_dir, "surrogate_summary.csv"), index=False)
 
-    print("Done. 明细和摘要已保存至：", result_dir)
+    print("明细和摘要已保存至：", result_dir)
 
 
