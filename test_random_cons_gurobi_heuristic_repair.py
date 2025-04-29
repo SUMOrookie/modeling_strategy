@@ -293,6 +293,54 @@ def solve_lp_files_gurobi(cache:dict,cache_file:str,directory: str, num_problems
     df = pd.DataFrame(results)
     return df
 
+
+def get_solving_cache(cache:dict,cache_file:str,directory: str, num_problems: int):
+    # 获取目录下所有的 .lp 文件
+    lp_files = [f for f in os.listdir(directory) if f.endswith('.lp')]
+    lp_files.sort()  # 按文件名排序，确保顺序一致
+
+    # 限制读取的文件数量
+    lp_files = lp_files[:num_problems]
+
+    # 依次读取并求解每个 .lp 文件
+    for lp_file in lp_files:
+        # 得到lp路径
+        lp_path = os.path.join(directory, lp_file)
+        print(f"Processing {lp_file}")
+
+        ## 原问题求解
+        # 如果缓存中已有结果，就直接读取，否则求解并写入缓存
+        if lp_path in cache:
+            print("------------read cache-------------")
+        else:
+            print("------------there is not cache, solving-------------")
+            # 读入模型
+            model_orig = gp.read(lp_path)
+
+            # 时间从读入开始算,求解
+            t0 = time.perf_counter()
+            model_orig.optimize()
+            t1 = time.perf_counter()
+
+            # 指标
+            obj_sense = model_orig.ModelSense
+            status_orig = model_orig.Status
+            obj_orig = model_orig.ObjVal
+            time_orig = t1 - t0
+
+            # 写入缓存
+            cache[lp_path] = {
+                'obj_sense':   obj_sense,
+                'status_orig': status_orig,
+                'obj_orig':    obj_orig,
+                'time_orig':   time_orig
+            }
+            with open(cache_file, 'w') as f:
+                json.dump(cache, f, indent=2)
+
+
+
+
 if __name__ == '__main__':
     # data_dir = "assignment_size_50_minval_200_maxval_300"
 
@@ -327,6 +375,7 @@ if __name__ == '__main__':
     else:
         cache = {}
 
+    get_solving_cache(cache,cache_file,lp_files_dir, solve_num)
     for seed in seed_list:
         random.seed(seed)
         if gurobi_solve:
