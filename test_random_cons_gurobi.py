@@ -249,11 +249,11 @@ if __name__ == '__main__':
     data_dir = "CA_500_600"
 
     lp_files_dir = f"./instance/test/{data_dir}"
-    solve_num = 10
-    agg_num = 40
+    solve_num = 1
+    agg_num = 50
     delete_con = True
-    repair = False
-    find_one = False
+    repair = True
+    find_one = True
     result_dir = f"./result/{data_dir}_agg_num_{agg_num}_delete_con_{str(delete_con)}_repair_{repair}_find_one_{find_one}"
     # 第一个是20的约束
     # 第二个490，取100吧
