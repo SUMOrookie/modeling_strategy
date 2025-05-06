@@ -1,0 +1,18 @@
+name: gurobi
+channels:
+  - conda-forge
+  - https://conda.anaconda.org/gurobi
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+  - https://repo.anaconda.com/pkgs/main
+  - https://repo.anaconda.com/pkgs/r
+dependencies:
+  - python=3.10
+  - gurobi
+  - pyscipopt
+  - ecole
+  - pandas
+  - numpy=1.22.4
+  - conda-pack
+prefix: /home/cc/ENTER/envs/gurobi

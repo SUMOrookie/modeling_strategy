@@ -62,7 +62,7 @@ def gen_primes(n):
         num += 1
     return primes
 
-def solve_lp_files_gurobi(cache:dict,cache_file:str,directory: str, num_problems: int, agg_num: int,seed:int,problem:str,repair:bool,find_one:bool):
+def solve_lp_files_gurobi(cache:dict,cache_file:str,directory: str, num_problems: int, agg_num: int,seed:int,problem:str,repair:bool,find_one:bool,zero_gap:bool):
     # 获取目录下所有的 .lp 文件
     lp_files = [f for f in os.listdir(directory) if f.endswith('.lp')]
     lp_files.sort()  # 按文件名排序，确保顺序一致
@@ -123,6 +123,9 @@ def solve_lp_files_gurobi(cache:dict,cache_file:str,directory: str, num_problems
         model_agg = gp.read(lp_path)
         t2 = time.perf_counter()
 
+
+
+
         # 指标
         cons_num_orig = model_agg.NumConstrs
 
@@ -163,12 +166,16 @@ def solve_lp_files_gurobi(cache:dict,cache_file:str,directory: str, num_problems
         cons_num_agg = model_agg.NumConstrs
 
         ## 一些求解的参数 todo
+        # 解数量，时间限制
         # model_agg.setParam('SolutionLimit', 1)
-        model_agg.setParam("TimeLimit", 1) # 求解时间，因为聚合后求解比较快。
+        # model_agg.setParam("TimeLimit", 1) # 求解时间，因为聚合后求解比较快。
+        print("------------solving agg model-------------")
         model_agg.optimize()
+        agg_objval_original = model_agg.ObjVal
 
         ## 可行性修复
         if repair:
+            print("------------repair-------------")
             # 获得变量值
             Vars = model_agg.getVars()
             vaule_dict = {var.VarName:var.X for var in Vars}
@@ -195,61 +202,114 @@ def solve_lp_files_gurobi(cache:dict,cache_file:str,directory: str, num_problems
                         var_name = var_vaule_one[i]
                         vaule_dict[var_name] = 0
 
-            # 赋初始值
-            repair_Vars = repair_model.getVars()
-            for idx in range(len(repair_Vars)):
-                varname = repair_Vars[idx].VarName
-                repair_model.getVarByName(varname).Start = vaule_dict[varname]
-                # repair_Vars[idx].VarHintVal  = vaule_list[idx]
+            ## 修复后，作为原模型初始解求解
+            if zero_gap:
+                print("------------zero gap repair-------------")
+                # 赋初始值
+                repair_Vars = repair_model.getVars()
+                for idx in range(len(repair_Vars)):
+                    varname = repair_Vars[idx].VarName
+                    repair_model.getVarByName(varname).Start = vaule_dict[varname]
+                    # repair_Vars[idx].VarHintVal  = vaule_list[idx]
 
-            ## 是否只找到可行解，还是求到最优
-            # 找到一个解
-            # if find_one:
-            #     repair_model.setParam('SolutionLimit', 1)
-            # else:
-            #     # 求到最优
-            #     pass
+                ## 是否只找到可行解，还是求到最优
+                # 找到一个解
+                # if find_one:
+                #     repair_model.setParam('SolutionLimit', 1)
+                # else:
+                #     # 求到最优
+                #     pass
 
-            # 求解（修复）,计算指标
-            repair_model.optimize()
-            t3 = time.perf_counter()
-            status_agg = repair_model.Status
-            obj_agg = repair_model.ObjVal
-            time_agg = t3 - t2
+                # 求解（修复）,计算指标
+                repair_model.optimize()
 
-            ## gap、时间约简计算
-            if obj_sense == GRB.MINIMIZE:
-                print("最小化问题")
-                primal_gap = (obj_agg - obj_orig) / abs(obj_orig) if obj_orig != 0 else float("inf")
+                t3 = time.perf_counter()
+                status_agg = repair_model.Status
+                obj_agg = repair_model.ObjVal
+                time_agg = t3 - t2
+
+                ## gap、时间约简计算
+                if obj_sense == GRB.MINIMIZE:
+                    print("最小化问题")
+                    primal_gap = (obj_agg - obj_orig) / abs(obj_orig) if obj_orig != 0 else float("inf")
+                else:
+                    print("最大化问题")
+                    primal_gap = (obj_orig - obj_agg) / abs(obj_orig) if obj_orig != 0 else float("inf")
+                time_reduce = (time_orig - time_agg) / time_orig if time_orig > 0 else 0
+
+                print(f"原obj:{obj_orig},\t 聚合后obj：{obj_agg}")
+                print(f"原时间:{time_orig},\t 聚合后时间:{time_agg}")
+                print(f"primal_gap:{primal_gap}")
+                print(f"time_reduce:{time_reduce}")
+
+                # 保存
+                results.append({
+                    "filename": lp_file,
+                    "status_orig": status_orig,
+                    "status_agg": status_agg,
+                    "obj_orig": obj_orig,
+                    "obj_agg": obj_agg,
+                    "primal_gap": primal_gap,
+                    "original_cons_num": cons_num_orig,
+                    "after_cons_num": cons_num_agg,
+                    "cons_reduce_ratio": (cons_num_orig - cons_num_agg) / cons_num_orig,
+                    "time_orig": time_orig,
+                    "time_agg": time_agg,
+                    "time_reduce": time_reduce,
+                    "original_cons": cons_num_orig,
+                    "after_agg_cons": cons_num_agg,
+                    "seed": seed,
+                })
+
             else:
-                print("最大化问题")
-                primal_gap = (obj_orig - obj_agg) / abs(obj_orig) if obj_orig != 0 else float("inf")
-            time_reduce = (time_orig - time_agg) / time_orig if time_orig > 0 else 0
+                print("------------no zero gap repair-------------")
+                t3 = time.perf_counter()
+                status_agg =  model_agg.Status # 应该不需要了
+                time_agg = t3 - t2
 
-            print(f"原obj:{obj_orig},\t 聚合后obj：{obj_agg}")
-            print(f"原时间:{time_orig},\t 聚合后时间:{time_agg}")
-            print(f"primal_gap:{primal_gap}")
-            print(f"time_reduce:{time_reduce}")
+                # 获得目标值
+                obj_expr = model_agg.getObjective()
+                obj_value = 0.0
+                obj_value += obj_expr.getConstant()
+                var_in_constr = {obj_expr.getVar(idx).VarName: idx for idx in range(obj_expr.size())}
+                for var_name, var_val in vaule_dict.items():
+                    if var_name in var_in_constr:
+                        obj_value += obj_expr.getCoeff(var_in_constr[var_name]) * var_val
 
-            # 保存
-            results.append({
-                "filename": lp_file,
-                "status_orig": status_orig,
-                "status_agg": status_agg,
-                "obj_orig": obj_orig,
-                "obj_agg": obj_agg,
-                "primal_gap": primal_gap,
-                "original_cons_num": cons_num_orig,
-                "after_cons_num": cons_num_agg,
-                "cons_reduce_ratio": (cons_num_orig - cons_num_agg) / cons_num_orig,
-                "time_orig": time_orig,
-                "time_agg": time_agg,
-                "time_reduce": time_reduce,
-                "original_cons": cons_num_orig,
-                "after_agg_cons": cons_num_agg,
-                "seed": seed,
-            })
+                if obj_sense == GRB.MINIMIZE:
+                    print("最小化问题")
+                    primal_gap = (obj_value - obj_orig) / abs(obj_orig) if obj_orig != 0 else float("inf")
+                else:
+                    print("最大化问题")
+                    primal_gap = (obj_orig - obj_value) / abs(obj_orig) if obj_orig != 0 else float("inf")
+                time_reduce = (time_orig - time_agg) / time_orig if time_orig > 0 else 0
+
+                print(f"原obj:{obj_orig},\t 聚合后obj：{agg_objval_original},\t 修复后obj:{obj_value}")
+                print(f"原时间:{time_orig},\t 聚合后时间:{time_agg}")
+                print(f"primal gap:{primal_gap}")
+
+                print(f"time_reduce:{time_reduce}")
+                # 保存
+                results.append({
+                    "filename": lp_file,
+                    "status_orig": status_orig,
+                    "status_agg": status_agg,
+                    "obj_orig": obj_orig,
+                    "obj_agg_no_repair": agg_objval_original,
+                    "obj_agg_after_repair": obj_value,
+                    "primal_gap": primal_gap,
+                    "original_cons_num": cons_num_orig,
+                    "after_cons_num": cons_num_agg,
+                    "cons_reduce_ratio": (cons_num_orig - cons_num_agg) / cons_num_orig,
+                    "time_orig": time_orig,
+                    "time_agg": time_agg,
+                    "time_reduce": time_reduce,
+                    "original_cons": cons_num_orig,
+                    "after_agg_cons": cons_num_agg,
+                    "seed": seed,
+                })
         else:
+            print("------------do not repair-------------")
             t3 = time.perf_counter()
             status_agg = model_agg.Status
             obj_agg = model_agg.ObjVal
@@ -267,7 +327,7 @@ def solve_lp_files_gurobi(cache:dict,cache_file:str,directory: str, num_problems
 
             print(f"原obj:{obj_orig},\t 聚合后obj：{obj_agg}")
             print(f"原时间:{time_orig},\t 聚合后时间:{time_agg}")
-            print(f"gap:{dual_gap}")
+            print(f"dual gap:{dual_gap}")
             print(f"time_reduce:{time_reduce}")
 
             results.append({
@@ -350,15 +410,16 @@ if __name__ == '__main__':
     data_dir = "CA_500_600"
 
     lp_files_dir = f"./instance/test/{data_dir}"
-    solve_num = 10
+    solve_num = 1
     agg_num = 50
 
     repair = True
     find_one = False
-    result_dir = f"./result/{data_dir}_agg_num_{agg_num}_heuristic_repair_{repair}_find_one_{find_one}"
+    zero_gap = False
+    result_dir = f"./result/{data_dir}_solve_{solve_num}_agg_num_{agg_num}_heuristic_repair_{repair}_find_one_{find_one}"
 
-    seed_list = [1,2,3,4,5]
-    # seed_list = [1]
+    # seed_list = [1,2,3,4,5]
+    seed_list = [1]
     all_runs = []
     gurobi_solve = True
     os.makedirs(result_dir, exist_ok=True)
@@ -379,7 +440,7 @@ if __name__ == '__main__':
     for seed in seed_list:
         random.seed(seed)
         if gurobi_solve:
-            df = solve_lp_files_gurobi(cache,cache_file,lp_files_dir, solve_num, agg_num,seed,problem,repair,find_one)
+            df = solve_lp_files_gurobi(cache,cache_file,lp_files_dir, solve_num, agg_num,seed,problem,repair,find_one,zero_gap)
             df.to_csv(result_dir + f"/surrogate_stats_aggnum_{agg_num}_seed_{seed}_repair_{repair}.csv", index=False)
             all_runs.append(df)
 
