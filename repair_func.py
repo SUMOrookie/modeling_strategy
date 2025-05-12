@@ -24,8 +24,8 @@ def compute_scores(model, varname_objc_map,value_dict, violation_count, c_mean,s
     if max_obj_coeff == 0:
         max_obj_coeff = 1
 
-    # alpha = 0.5
-    alpha = 0
+    # alpha = 0.5 todo 需要调
+    alpha = 0.5
     if sense == GRB.MAXIMIZE:
         # 最大化问题
         for var_name, n_j in violation_count.items():
@@ -139,3 +139,35 @@ def heuristic_repair(repair_model,vaule_dict):
                 var_name = var_vaule_one[i]
                 vaule_dict[var_name] = 0
     return vaule_dict
+
+
+def heuristic_repair_subproblem(repair_model,value_dict):
+    print("------------repair-------------")
+
+    # 复制模型，用来构造子问题
+    sub = repair_model.copy()
+
+    # 根据 value_dict 删除取0的变量
+    zeros = [v for v in sub.getVars() if value_dict.get(v.VarName, 0) == 0]
+    for v in zeros:
+        sub.remove(v)
+    sub.update()
+
+    # 清理空约束：若某约束不再包含任何变量，则删除它
+    for c in sub.getConstrs():
+        row = sub.getRow(c)
+        if row.size() == 0:
+            sub.remove(c)
+    sub.update()
+
+    # 求解子模型
+    sub.optimize()
+
+    # 6. 将子模型解写回 value_dict
+    if sub.Status == GRB.OPTIMAL or sub.Status == GRB.FEASIBLE:
+        for v in sub.getVars():
+            # 保留变量在子模型中可能被改为0
+            value_dict[v.VarName] = int(round(v.X))
+
+    return value_dict
+
