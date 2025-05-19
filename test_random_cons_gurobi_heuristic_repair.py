@@ -78,38 +78,43 @@ def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num:
         # 指标
         cons_num_orig = model_agg.NumConstrs
 
-        # 只能sample出同类型约束,todo
-        conss = model_agg.getConstrs()
-        sample = random.sample(conss, min(agg_num, len(conss)))
+        # 聚合
+        utils.aggregate_constr(model_agg,agg_num)
 
-        # 计算聚合约束
-        agg_coeffs = {}
-        agg_rhs = 0.0
-        for idx, cons in enumerate(sample):
-            u = u_list[idx]
-            constr_expr = model_agg.getRow(cons)
-            for j in range(constr_expr.size()):
-                var = constr_expr.getVar(j)
-                coef = constr_expr.getCoeff(j)
-                agg_coeffs[var.VarName] = agg_coeffs.get(var.VarName, 0.0) + u * coef
-            agg_rhs += u * cons.RHS
-            model_agg.remove(cons) # 删除约束
-        model_agg.update()
-
-        # 构造聚合约束
-        expr = 0
-        for var_name, coef in agg_coeffs.items():
-            var = model_agg.getVarByName(var_name)
-            expr += coef * var
-
-        # todo:根据约束类型定义符号
-        if problem == "assignment":
-            model_agg.addConstr(expr == agg_rhs, name="agg_constraint")
-        elif problem == "CA":
-            model_agg.addConstr(expr <= agg_rhs, name="agg_constraint")
-        else:
-            raise Exception("unknown problem type")
-        model_agg.update()
+        #
+        #
+        # # 只能sample出同类型约束,todo
+        # conss = model_agg.getConstrs()
+        # sample = random.sample(conss, min(agg_num, len(conss)))
+        #
+        # # 计算聚合约束
+        # agg_coeffs = {}
+        # agg_rhs = 0.0
+        # for idx, cons in enumerate(sample):
+        #     u = u_list[idx]
+        #     constr_expr = model_agg.getRow(cons)
+        #     for j in range(constr_expr.size()):
+        #         var = constr_expr.getVar(j)
+        #         coef = constr_expr.getCoeff(j)
+        #         agg_coeffs[var.VarName] = agg_coeffs.get(var.VarName, 0.0) + u * coef
+        #     agg_rhs += u * cons.RHS
+        #     model_agg.remove(cons) # 删除约束
+        # model_agg.update()
+        #
+        # # 构造聚合约束
+        # expr = 0
+        # for var_name, coef in agg_coeffs.items():
+        #     var = model_agg.getVarByName(var_name)
+        #     expr += coef * var
+        #
+        # # todo:根据约束类型定义符号
+        # if problem == "assignment":
+        #     model_agg.addConstr(expr == agg_rhs, name="agg_constraint")
+        # elif problem == "CA":
+        #     model_agg.addConstr(expr <= agg_rhs, name="agg_constraint")
+        # else:
+        #     raise Exception("unknown problem type")
+        # model_agg.update()
 
         # 聚合后约束数量
         cons_num_agg = model_agg.NumConstrs
@@ -195,6 +200,8 @@ def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num:
                     vaule_dict = repair_func.heuristic_repair_with_score(repair_model, vaule_dict)
                 elif repair_method == "subproblem":
                     vaule_dict = repair_func.heuristic_repair_subproblem(repair_model, vaule_dict)
+                elif repair_method == "lightmilp":
+                    vaule_dict = repair_func.heuristic_repair_light_MILP(repair_model,vaule_dict,lp_path)
                 else:
                     raise Exception("unknown repair_method")
 
@@ -207,7 +214,8 @@ def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num:
                     repair_Vars = repair_model.getVars()
                     for idx in range(len(repair_Vars)):
                         varname = repair_Vars[idx].VarName
-                        repair_model.getVarByName(varname).Start = vaule_dict[varname]
+                        if vaule_dict[varname]!= None:
+                            repair_model.getVarByName(varname).Start = vaule_dict[varname]
                         # repair_Vars[idx].VarHintVal  = vaule_list[idx]
                         # 修复后的作为start，松弛的用hintval
 
@@ -317,23 +325,25 @@ if __name__ == '__main__':
     # problem = "assignment"
     problem = "CA"
     # data_dir = "CA_500_700"
+    # data_dir = "CA_500_600"
     data_dir = "CA_500_600"
     # data_dir = "CA_200_400"
 
+    # lp_files_dir = f"./instance/test/{data_dir}"
     lp_files_dir = f"./instance/test/{data_dir}"
-    # seed_list = [2,3,4,5,6]
-    seed_list = [2,3,4,5,6,7,8,9,10,11]
+    seed_list = [2,3,4,5,6]
+    # seed_list = [2,3,4,5,6,7,8,9,10,11]
     # seed_list = [1]
     solve_num = 10
     agg_num = 50
     Threads = 0 # default 0
     # Threads = 5
     # agg_model_solve_time = -1 # 不限制时间
-    agg_model_solve_time = 2
+    agg_model_solve_time = 1
 
-    repair_method_list = ["None", "gurobi", "naive", "score", "subproblem"]
-    post_solve = False
-    for idx in range(4,5):
+    repair_method_list = ["None", "gurobi", "naive", "score", "subproblem","lightmilp"]
+    post_solve = True
+    for idx in range(5,6):
 
         repair_method = repair_method_list[idx]
 

@@ -5,6 +5,8 @@ import os
 import json
 import gurobipy as gp
 import time
+import utils
+import math
 def get_a_assignmeng_lp():
     # 利用随机数创建一个成本矩阵cost_matrix
     driver_num = job_num = 5
@@ -116,3 +118,140 @@ def load_cache(cache_dir,data_dir,lp_files_dir,solve_num,Threads):
 
     get_solving_cache(cache,cache_file,lp_files_dir, solve_num,Threads)
     return cache
+
+
+def generate_and_save_feasible_model(lp_path, out_dir,
+                                     initial_rhs=1,
+                                     initial_frac=0.5,
+                                     seed=None):
+    """
+    1. 读取原模型；
+    2. 迭代添加随机 ≥ 初始RHS的新约束，数量为原约束数 * initial_frac；
+       - 若当前新模型不可行，则将约束数量减半重试；
+       - 若可行，则将模型写入 out_dir/"new_constr" 下，并在文件名加上 "new_constr"。
+    """
+    if seed is not None:
+        random.seed(seed)
+        # 读入原模型
+    model0 = gp.read(lp_path)
+    orig_constrs = model0.getConstrs()
+    orig_count = len(orig_constrs) // 5
+
+
+    # 计算初始要添加的约束数
+    num_new = max(1, int(orig_count * initial_frac))
+
+    # 确保输出目录存在
+    save_dir = out_dir + "_new_constr"
+    os.makedirs(save_dir, exist_ok=True)
+
+    iteration = 0
+    while num_new >= 1:
+        iteration += 1
+        # 深拷贝原模型
+        model = model0.copy()
+        all_vars = model.getVars()
+        # 添加 num_new 条随机 ≥ 约束
+        for i in range(num_new):
+            # 随机选变量个数 k
+            k = random.randint(2, 10)
+            vars_in_expr = random.sample(all_vars, k)
+            expr = gp.quicksum(vars_in_expr)
+            model.addConstr(expr >= initial_rhs, name=f"rand_ge_{iteration}_{i}")
+        model.update()
+
+        # 判断可行性
+        model.Params.OutputFlag = 0  # 关闭求解器日志
+        model.Params.SolutionLimit = 1
+        model.optimize()
+        status = model.Status
+
+        if status == gp.GRB.SOLUTION_LIMIT:
+            print("已找到可行解，提前终止")
+            Vars = model.getVars()
+            # for var in Vars:
+            #     print(var.VarName,"\t",var.X)
+            # 可行，则保存模型并结束
+            base_name = os.path.splitext(os.path.basename(lp_path))[0]
+            save_path = os.path.join(
+                save_dir,
+                f"{base_name}_new_constr_{num_new}.lp"
+            )
+            model.write(save_path)
+            print(f"[迭代{iteration}] 可行模型已保存：{save_path}")
+            return save_path
+        else:
+            # 不可行，约束数减半，重试
+            print(f"[迭代{iteration}] 不可行，约束数 {num_new} -> {num_new // 2}")
+            num_new //= 2
+
+    raise RuntimeError("无法通过随机添加 ≥ 约束获得可行解；所有尝试均失败。")
+
+def aggregate_constr(model_agg,agg_num):
+    # 对于sample出的约束，要分为大于等于、小于等于和等于
+    conss = model_agg.getConstrs()
+    sample = random.sample(conss, min(agg_num, len(conss)))
+
+    # 乘子
+    # 生成乘子
+    primes = utils.gen_primes(agg_num)
+    u_list = [math.log(p) for p in primes]
+
+    # 计算聚合约束
+    agg_coeffs_leq = {}
+    agg_rhs_leq = 0.0
+    agg_coeffs_geq = {}
+    agg_rhs_geq = 0.0
+    agg_coeffs_eq = {}
+    agg_rhs_eq = 0.0
+    for idx, cons in enumerate(sample):
+        u = u_list[idx]
+        constr_expr = model_agg.getRow(cons)
+        sense = cons.Sense
+        for j in range(constr_expr.size()):
+            var = constr_expr.getVar(j)
+            coef = constr_expr.getCoeff(j)
+            if sense == "<":
+                agg_coeffs_leq[var.VarName] = agg_coeffs_leq.get(var.VarName, 0.0) + u * coef
+            elif sense == ">":
+                agg_coeffs_geq[var.VarName] = agg_coeffs_geq.get(var.VarName, 0.0) + u * coef
+            elif sense == "=":
+                agg_coeffs_eq[var.VarName] = agg_coeffs_eq.get(var.VarName, 0.0) + u * coef
+            else:
+                raise Exception("unknown constr sense")
+        if sense == "<":
+            agg_rhs_leq += u * cons.RHS
+        elif sense == ">":
+            agg_rhs_geq += u * cons.RHS
+        elif sense == "=":
+            agg_rhs_eq += u * cons.RHS
+        else:
+            raise Exception("unknown constr sense")
+        model_agg.remove(cons)  # 删除约束
+    model_agg.update()
+
+    # 构造聚合约束
+    expr_leq = 0
+    expr_geq = 0
+    expr_eq = 0
+    for var_name, coef in agg_coeffs_leq.items():
+        var = model_agg.getVarByName(var_name)
+        expr_leq += coef * var
+    for var_name, coef in agg_coeffs_geq.items():
+        var = model_agg.getVarByName(var_name)
+        expr_geq += coef * var
+    for var_name, coef in agg_coeffs_eq.items():
+        var = model_agg.getVarByName(var_name)
+        expr_eq += coef * var
+
+    # todo:根据约束类型定义符号
+    # if problem == "assignment":
+    #     model_agg.addConstr(expr == agg_rhs, name="agg_constraint")
+    # elif problem == "CA":
+    #     model_agg.addConstr(expr <= agg_rhs, name="agg_constraint")
+    # else:
+    #     raise Exception("unknown problem type")
+    model_agg.addConstr(expr_leq <= agg_rhs_leq, name="agg_constraint_leq")
+    model_agg.addConstr(expr_geq >= agg_rhs_geq, name="agg_constraint_geq")
+    model_agg.addConstr(expr_eq == agg_rhs_eq, name="agg_constraint_eq")
+    model_agg.update()

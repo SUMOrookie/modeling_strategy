@@ -6,7 +6,69 @@ import numpy as np
 import argparse
 from helper import get_a_new2
 import torch.multiprocessing as mp
-def solve_grb(filepath,log_dir,settings):
+# def solve_grb(filepath,log_dir,settings):
+#     gp.setParam('LogToConsole', 0)
+#     m = gp.read(filepath)
+#
+#     m.Params.PoolSolutions = settings['maxsol']
+#     m.Params.PoolSearchMode = settings['mode']
+#     m.Params.TimeLimit = settings['maxtime']
+#     m.Params.Threads = settings['threads']
+#     log_path = os.path.join(log_dir, os.path.basename(filepath)+'.log')
+#     with open(log_path,'w'):
+#         pass
+#
+#     m.Params.LogFile = log_path
+#     m.optimize()
+#
+#     sols = []
+#     objs = []
+#     solc = m.getAttr('SolCount')
+#
+#     mvars = m.getVars()
+#     #get variable name,
+#     oriVarNames = [var.varName for var in mvars]
+#
+#     varInds=np.arange(0,len(oriVarNames))
+#
+#     for sn in range(solc):
+#         m.Params.SolutionNumber = sn
+#         sols.append(np.array(m.Xn))
+#         objs.append(m.PoolObjVal)
+#
+#
+#     sols = np.array(sols,dtype=np.float32)
+#     objs = np.array(objs,dtype=np.float32)
+#
+#     sol_data = {
+#         'var_names': oriVarNames,
+#         'sols': sols,
+#         'objs': objs,
+#     }
+#
+#     return sol_data
+
+
+def solve_grb(filepath, log_dir, settings, num_subsets=0, subset_size=0):
+    """
+    Solve a Gurobi MIP, record original runtime, then sample and solve aggregated constraint subsets.
+
+    Args:
+        filepath (str): Path to the MIP file.
+        log_dir (str): Directory for solver logs.
+        settings (dict): Gurobi parameters (maxsol, mode, maxtime, threads).
+        num_subsets (int): Number of random subsets to sample.
+        subset_size (int): Size of each constraint subset.
+
+    Returns:
+        dict: sol_data with keys:
+            - 'var_names': list of variable names
+            - 'orig_runtime': float original solve time
+            - 'agg_runtimes': list of floats, each aggregated solve time
+            - 'agg_subsets': list of lists, each subset of constraint indices
+    """
+
+    # prepare log file
     gp.setParam('LogToConsole', 0)
     m = gp.read(filepath)
 
@@ -55,6 +117,7 @@ def collect(ins_dir,q,sol_dir,log_dir,bg_dir,settings):
         if not filename:
             break
         filepath = os.path.join(ins_dir,filename)        
+        # sol_data = solve_grb(filepath,log_dir,settings)
         sol_data = solve_grb(filepath,log_dir,settings)
         #get bipartite graph , binary variables' indices
         A2,v_map2,v_nodes2,c_nodes2,b_vars2=get_a_new2(filepath)

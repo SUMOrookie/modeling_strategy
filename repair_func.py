@@ -1,5 +1,5 @@
 from gurobipy import GRB
-
+import gurobipy as gp
 
 def compute_scores(model, varname_objc_map,value_dict, violation_count, c_mean,sense):
     """
@@ -171,3 +171,94 @@ def heuristic_repair_subproblem(repair_model,value_dict):
 
     return value_dict
 
+
+
+def heuristic_repair_light_MILP(repair_model,value_dict,lp_path):
+    conss = repair_model.getConstrs()
+
+    for constr in conss:
+        row = repair_model.getRow(constr)
+        var_coeffs_in_constr = {row.getVar(idx).VarName:row.getCoeff(idx) for idx in range(row.size())}
+        rhs = constr.RHS
+        sense = constr.Sense
+        flag = 0
+        lhs_value = 0.0
+        # 累加左侧值
+        for varname,coeff in var_coeffs_in_constr.items():
+            if value_dict[varname] == None:
+                flag = 1
+            else:
+                lhs_value += value_dict[varname] * coeff
+        # print("lhs_value：",lhs_value)
+        # if lhs_value == 6:
+        #     print(var_coeffs_in_constr)
+        #     print(sense)
+        # 根据约束类型判断是否违反
+        if sense == "<":
+            if lhs_value > rhs:
+                valid = 0
+                # 违反，全部释放？
+                for varname in var_coeffs_in_constr.keys():
+                    if value_dict[varname] != None:
+                        value_dict[varname] = None
+
+        elif sense == ">":
+            if lhs_value + flag < rhs:
+                valid = 0
+                # 违反，全部释放
+                for varname in var_coeffs_in_constr.keys():
+                    if value_dict[varname] != None:
+                        value_dict[varname] = None
+
+        else:
+            raise Exception("unknown sense")
+
+    # 验证解是否可行
+    while True:
+
+        #
+        post_model = gp.read(lp_path)
+        post_model.setParam('OutputFlag', 0)
+        for var_name, value in value_dict.items():
+            var = post_model.getVarByName(var_name)
+            if var is None:
+               raise Exception(f"变量 {var_name} 不存在于模型中")
+
+            # 添加等式约束：var == value
+            # print(var_name, ":", value)
+            if value == None:
+                pass
+            else:
+                post_model.addConstr(var == int(value), f"fix_{var_name}")
+        post_model.update()
+        post_model.optimize()
+
+        if post_model.status == GRB.OPTIMAL:
+            print("解是可行的（满足所有约束和变量上下界）")
+            break
+        else:
+            print("status:",post_model.status)
+            post_model.computeIIS()
+            # 2. 收集所有被标记为 IIS 的约束
+            infeasible_constrs = []
+            for constr in post_model.getConstrs():
+                all_none = True
+                if constr.IISConstr:  # 属性为 True 表示该约束属于 IIS
+                    row = post_model.getRow(constr)
+                    name_list = [row.getVar(idx).VarName for idx in range(row.size())]
+                    for var_name in name_list:
+                        if value_dict[var_name] != None:
+                            value_dict[var_name] = None
+                            all_none = False
+                    if not all_none:
+                       break
+                    # infeasible_constrs.append(constr.ConstrName)
+                    # row = post_model.getRow(constr)
+                    # print(row,end=" ")
+                    # print(constr.Sense, constr.RHS)
+                    # name_list = [row.getVar(idx).VarName for idx in range(row.size())]
+                    # for var_name in name_list:
+                    #     print(var_name,":",value_dict[var_name],end=" ")
+                    # print("---")
+            # raise Exception("不可行")
+    return value_dict
