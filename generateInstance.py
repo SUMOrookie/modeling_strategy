@@ -179,5 +179,5 @@ if __name__ == '__main__':
         for i in range(3):
             generate_instances(100, "train", "CA", epoch=i)
     else:  # 在下面改需要的，epoch不用管全为1
-        generate_instances(50, "train", "CA", epoch=1)
+        generate_instances(100, "train", "CA", epoch=1)
         # generate_instances(5, "test", "IS", epoch=1)

@@ -104,7 +104,7 @@ def get_solving_cache(cache:dict,cache_file:str,directory: str, num_problems: in
             with open(cache_file, 'w') as f:
                 json.dump(cache, f, indent=2)
 
-def load_cache(cache_dir,data_dir,lp_files_dir,solve_num,Threads):
+def load_cache(cache_dir,data_dir,lp_files_dir,solve_num,Threads=0):
 
     os.makedirs(cache_dir,exist_ok=True)
     cache_file = os.path.join(cache_dir,f'{data_dir}_solve_cache.json')
@@ -187,13 +187,16 @@ def generate_and_save_feasible_model(lp_path, out_dir,
 
     raise RuntimeError("无法通过随机添加 ≥ 约束获得可行解；所有尝试均失败。")
 
-def aggregate_constr(model_agg,agg_num):
+def aggregate_constr(model_agg,agg_num=None,sample=None):
     # 对于sample出的约束，要分为大于等于、小于等于和等于
     conss = model_agg.getConstrs()
-    sample = random.sample(conss, min(agg_num, len(conss)))
+
+    if sample == None:
+        sample = random.sample(conss, min(agg_num, len(conss)))
+    if agg_num == None:
+        agg_num = 50
 
     # 乘子
-    # 生成乘子
     primes = utils.gen_primes(agg_num)
     u_list = [math.log(p) for p in primes]
 
@@ -244,13 +247,6 @@ def aggregate_constr(model_agg,agg_num):
         var = model_agg.getVarByName(var_name)
         expr_eq += coef * var
 
-    # todo:根据约束类型定义符号
-    # if problem == "assignment":
-    #     model_agg.addConstr(expr == agg_rhs, name="agg_constraint")
-    # elif problem == "CA":
-    #     model_agg.addConstr(expr <= agg_rhs, name="agg_constraint")
-    # else:
-    #     raise Exception("unknown problem type")
     model_agg.addConstr(expr_leq <= agg_rhs_leq, name="agg_constraint_leq")
     model_agg.addConstr(expr_geq >= agg_rhs_geq, name="agg_constraint_geq")
     model_agg.addConstr(expr_eq == agg_rhs_eq, name="agg_constraint_eq")
