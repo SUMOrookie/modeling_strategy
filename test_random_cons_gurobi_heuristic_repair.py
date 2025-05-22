@@ -186,7 +186,7 @@ def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num:
             # 其他情况，调用对应的启发式函数
             # 然后判断postsolve
             if repair_method == "gurobi":
-                if post_solve:
+                if PostSolve:
                     pass
                 else:
                     # gurobi修复

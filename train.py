@@ -47,12 +47,13 @@ parser.add_argument('--no-cuda', action='store_true', default=False, help='Disab
 parser.add_argument('--fastmode', action='store_true', default=False, help='Validate during training pass.')
 parser.add_argument('--seed', type=int, default=16, help='Random seed.')
 # parser.add_argument('--epochs', type=int, default=30, help='Number of epochs to train.')
-parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train.')
-parser.add_argument('--lr', type=float, default=1e-3, help='Initial learning rate.')
+parser.add_argument('--epochs', type=int, default=999, help='Number of epochs to train.')
+parser.add_argument('--lr', type=float, default=1e-5, help='Initial learning rate.')
 parser.add_argument('--weight_decay', type=float, default=5e-3, help='Weight decay (L2 loss on parameters).')
 parser.add_argument('--hidden', type=int, default=64, help='Number of hidden units.')
 parser.add_argument('--nb_heads', type=int, default=6, help='Number of head attentions.')
-parser.add_argument('--dropout', type=float, default=0.5, help='Dropout rate (1 - keep probability).')
+# parser.add_argument('--dropout', type=float, default=0.5, help='Dropout rate (1 - keep probability).')
+parser.add_argument('--dropout', type=float, default=0.1, help='Dropout rate (1 - keep probability).')
 parser.add_argument('--alpha', type=float, default=0.1, help='Alpha for the leaky_relu.')
 # parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
 parser.add_argument('--patience', type=int, default=20, help='Patience')
@@ -229,8 +230,13 @@ def train(epoch, num):
 t_total = time.time()
 loss_values = []
 bad_counter = 0
-best = args.epochs + 1
+best_loss = 1e3
+# best = args.epochs + 1
 best_epoch = 0
+
+model_save_path = f"./model/{task_name}"
+os.makedirs(model_save_path, exist_ok=True)
+
 for epoch in range(args.epochs):
     print("epoch:",epoch)
     model.train()
@@ -249,9 +255,9 @@ for epoch in range(args.epochs):
     print('Epoch: {:04d}'.format(epoch+1),
           'loss_train: {:.4f}'.format(now_loss))
 
-    torch.save(model.state_dict(), '{}.pkl'.format(epoch))
-    if loss_values[-1] < best:
-        best = loss_values[-1]
+    torch.save(model.state_dict(), model_save_path + f'/model_{best_loss}.pkl'.format(epoch))
+    if loss_values[-1] < best_loss:
+        best_loss = loss_values[-1]
         best_epoch = epoch
         bad_counter = 0
     else:
@@ -260,17 +266,17 @@ for epoch in range(args.epochs):
     if bad_counter == args.patience:  # Stop if there's no improvement for several consecutive rounds
         break
 
-    files = glob.glob('*.pkl')
-    for file in files:
-        epoch_nb = int(file.split('.')[0])
-        if epoch_nb < best_epoch:
-            os.remove(file)
-
-files = glob.glob('*.pkl')
-for file in files:
-    epoch_nb = int(file.split('.')[0])
-    if epoch_nb > best_epoch:
-        os.remove(file)
+#     files = glob.glob('*.pkl')
+#     for file in files:
+#         epoch_nb = int(file.split('.')[0])
+#         if epoch_nb < best_epoch:
+#             os.remove(file)
+#
+# files = glob.glob('*.pkl')
+# for file in files:
+#     epoch_nb = int(file.split('.')[0])
+#     if epoch_nb > best_epoch:
+#         os.remove(file)
 
 print("Optimization Finished!")
 print("Total time elapsed: {:.4f}s".format(time.time() - t_total))

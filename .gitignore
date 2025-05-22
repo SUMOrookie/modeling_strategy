@@ -3,3 +3,6 @@
 *.csv
 instance
 result
+demo.py
+*.pickle
+dataset
