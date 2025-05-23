@@ -35,7 +35,7 @@ def decimal_to_binary_list(n, i):
     max_bits = len(bin(n - 1)) - 2  # 减2是因为bin()返回的字符串前缀是 '0b'
 
     # 将 i 转换为指定位数的二进制字符串，并拆分为列表
-    return list(format(i, f'0{max_bits}b'))
+    return [int(c) for c in format(i, f'0{max_bits}b')]
 
 
 def Gurobi_solver(n, m, k, site, value, constraint, constraint_type, coefficient, time_limit, obj_type, lower_bound, upper_bound, value_type):
@@ -407,17 +407,17 @@ def optimize(
 
         sample_round = 40
         k = 50
-        constr_score, subset_and_timereduce = gen_constr_label(lp_path, cache,sample_round,k)
+        # constr_score, subset_and_timereduce = gen_constr_label(lp_path, cache,sample_round,k)
 
         os.makedirs(dataset_dir + f"/BG",exist_ok=True)
         os.makedirs(dataset_dir + f"/constr_score", exist_ok=True)
         os.makedirs(dataset_dir + f"/solve_info", exist_ok=True)
         with open(dataset_dir + f"/BG" + f"/{lp_file.rsplit('.',1)[0]}_BG" + '.pickle', 'wb') as f:
                 pickle.dump([variable_features, constraint_features, edge_indices, edge_features], f)
-        with open(dataset_dir + f"/constr_score" + f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle', 'wb') as f:
-                pickle.dump([constr_score], f)
-        with open(dataset_dir + f"/solve_info" + f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle', 'wb') as f:
-                pickle.dump([subset_and_timereduce], f)
+        # with open(dataset_dir + f"/constr_score" + f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle', 'wb') as f:
+        #         pickle.dump([constr_score], f)
+        # with open(dataset_dir + f"/solve_info" + f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle', 'wb') as f:
+        #         pickle.dump([subset_and_timereduce], f)
 
 
 def parse_args():

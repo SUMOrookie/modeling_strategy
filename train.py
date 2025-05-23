@@ -74,7 +74,7 @@ random.seed(args.seed)
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 
-data_num = 27
+
 data_features = []
 data_labels = []
 data_solution = []
@@ -87,21 +87,35 @@ data_idx_train = []
 
 task_name = "CA_500_600"
 dataset_dir = f"./dataset/{task_name}"
-dataset_files = [f for f in os.listdir(dataset_dir) if f.endswith('.pickle')]
+BG_dir = os.path.join(dataset_dir,"BG")
+constr_score_dir = os.path.join(dataset_dir,"constr_score")
+
+# dataset_files = [f for f in os.listdir(dataset_dir) if f.endswith('.pickle')]
+BG_files = [f for f in os.listdir(BG_dir) if f.endswith('.pickle')]
+constr_score_files = [f for f in os.listdir(constr_score_dir) if f.endswith('.pickle')]
+BG_files.sort()
+constr_score_files.sort()
+# data_num = 27
+data_num = len(BG_files)
 
 # random.shuffle(dataset_files)
 threshold = 0
 k = 50
-for pickle_file_name in dataset_files[:data_num]:
-    pickle_path = os.path.join(dataset_dir,pickle_file_name)
+# for pickle_file_name in dataset_files[:data_num]:
+for pickle_file_name,constr_score_file_name in zip(BG_files,constr_score_files):
+    pickle_path = os.path.join(BG_dir,pickle_file_name)
+    constr_score_path = os.path.join(constr_score_dir,constr_score_file_name)
     with open(pickle_path,"rb") as f:
         problem = pickle.load(f)
+    with open(constr_score_path,"rb") as f:
+        constr_score = pickle.load(f)
+
 
     variable_features = problem[0]
     constraint_features = problem[1]
     edge_indices = problem[2]
     edge_feature = problem[3]
-    constr_score = problem[4]
+    constr_score = constr_score[0]
     #print(optimal_solution)
     #edge, features, labels, idx_train = load_data()
 
@@ -132,9 +146,14 @@ for pickle_file_name in dataset_files[:data_num]:
     edge_features = torch.as_tensor(edge_features)
     data_edge_features.append(edge_features)
 
-    for i in range(m):
-        for j in range(var_size - con_size):
-            constraint_features[i].append(0)
+    if var_size > con_size:
+        for i in range(m):
+            for j in range(var_size - con_size):
+                constraint_features[i].append(0)
+    else:
+        for i in range(n):
+            for j in range(con_size - var_size):
+                variable_features[i].append(0)
     features = variable_features + constraint_features
     features = torch.as_tensor(features).float()
 

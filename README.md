@@ -1,2 +1,7 @@
-# modeling_strategy
-目前实现了问题实例生成、问题求解、随机聚合问题生成、问题修复、指标输出
+# test_random_cons_gurobi_heuristic_repair.py
+用来测试随机聚合的效果，里面有不同的修复方式
+
+# gen_train_data.py
+生成训练用的二部图，标签
+
+# 
