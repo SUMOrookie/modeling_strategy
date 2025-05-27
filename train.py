@@ -13,9 +13,47 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
-
+import parser_utils
 from EGAT_models import SpGAT
+import matplotlib.pyplot as plt
+from typing import List
+def plot_and_save_loss(loss_values: List[torch.Tensor], output_path: str = "loss_curve.png") -> None:
+    """
+    绘制损失值曲线并保存为图片
 
+    参数:
+    - loss_values: 包含Tensor类型损失值的列表
+    - output_path: 图片保存路径
+    """
+    # 从Tensor中提取数值
+    loss_values = [float(loss) for loss in loss_values]
+
+    # 设置中文字体支持
+    plt.rcParams["font.family"] = ["SimHei", "WenQuanYi Micro Hei", "Heiti TC"]
+
+    # 创建图形
+    plt.figure(figsize=(10, 6))
+    plt.plot(loss_values, 'b-o', linewidth=2, markersize=6)
+
+    # 添加标题和标签
+    plt.title('训练损失值变化曲线', fontsize=16)
+    plt.xlabel('迭代次数', fontsize=14)
+    plt.ylabel('损失值', fontsize=14)
+
+    # 添加网格线
+    plt.grid(True, linestyle='--', alpha=0.7)
+
+    # 设置坐标轴范围
+    plt.ylim(bottom=0)
+
+    # 保存图形
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.show()
+    print(f"损失曲线已保存至: {output_path}")
+
+    # 关闭图形
+    plt.close()
 class Focal_Loss(nn.Module):
     def __init__(self, weight, gamma=2):
         super(Focal_Loss, self).__init__()
@@ -27,7 +65,7 @@ class Focal_Loss(nn.Module):
         preds: logits output values
         labels: labels
         """
-        preds = F.softmax(preds, dim=1).to(device) # 为什么要在做一次？
+        # preds = F.softmax(preds, dim=1).to(device) # 为什么要在做一次？
         eps = 1e-7
         target = self.one_hot(preds.size(1), labels).to(device)
         ce = (-1 * torch.log(preds + eps) * target).to(device)
@@ -42,22 +80,25 @@ class Focal_Loss(nn.Module):
         return one
 
 # Training settings
-parser = argparse.ArgumentParser()
-parser.add_argument('--no-cuda', action='store_true', default=False, help='Disables CUDA training.')
-parser.add_argument('--fastmode', action='store_true', default=False, help='Validate during training pass.')
-parser.add_argument('--seed', type=int, default=16, help='Random seed.')
-# parser.add_argument('--epochs', type=int, default=30, help='Number of epochs to train.')
-parser.add_argument('--epochs', type=int, default=999, help='Number of epochs to train.')
-parser.add_argument('--lr', type=float, default=1e-5, help='Initial learning rate.')
-parser.add_argument('--weight_decay', type=float, default=5e-3, help='Weight decay (L2 loss on parameters).')
-parser.add_argument('--hidden', type=int, default=64, help='Number of hidden units.')
-parser.add_argument('--nb_heads', type=int, default=6, help='Number of head attentions.')
-# parser.add_argument('--dropout', type=float, default=0.5, help='Dropout rate (1 - keep probability).')
-parser.add_argument('--dropout', type=float, default=0.1, help='Dropout rate (1 - keep probability).')
-parser.add_argument('--alpha', type=float, default=0.1, help='Alpha for the leaky_relu.')
-# parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
-parser.add_argument('--patience', type=int, default=20, help='Patience')
+# parser = argparse.ArgumentParser()
+# parser.add_argument('--no-cuda', action='store_true', default=False, help='Disables CUDA training.')
+# parser.add_argument('--fastmode', action='store_true', default=False, help='Validate during training pass.')
+# parser.add_argument('--seed', type=int, default=47, help='Random seed.')
+# # parser.add_argument('--epochs', type=int, default=30, help='Number of epochs to train.')
+# parser.add_argument('--epochs', type=int, default=99, help='Number of epochs to train.')
+# parser.add_argument('--lr', type=float, default=1e-5, help='Initial learning rate.')
+# parser.add_argument('--weight_decay', type=float, default=5e-3, help='Weight decay (L2 loss on parameters).')
+# parser.add_argument('--hidden', type=int, default=64, help='Number of hidden units.')
+# # parser.add_argument('--hidden', type=int, default=256, help='Number of hidden units.')
+# parser.add_argument('--nb_heads', type=int, default=6, help='Number of head attentions.')
+# # parser.add_argument('--nb_heads', type=int, default=16, help='Number of head attentions.')
+# # parser.add_argument('--dropout', type=float, default=0.5, help='Dropout rate (1 - keep probability).')
+# parser.add_argument('--dropout', type=float, default=0.1, help='Dropout rate (1 - keep probability).')
+# parser.add_argument('--alpha', type=float, default=0.1, help='Alpha for the leaky_relu.')
+# # parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
+# parser.add_argument('--patience', type=int, default=300, help='Patience')
 
+parser = parser_utils.get_parser("train")
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 print(torch.cuda.is_available())
@@ -102,9 +143,16 @@ data_num = len(BG_files)
 threshold = 0
 k = 50
 # for pickle_file_name in dataset_files[:data_num]:
-for pickle_file_name,constr_score_file_name in zip(BG_files,constr_score_files):
+
+solve_info_dir = os.path.join(dataset_dir,"solve_info")
+solve_info_files = [f for f in os.listdir(solve_info_dir) if f.endswith('.pickle')]
+solve_info_files.sort()
+for pickle_file_name,constr_score_file_name,solve_info_file_name in zip(BG_files,constr_score_files,solve_info_files):
     pickle_path = os.path.join(BG_dir,pickle_file_name)
     constr_score_path = os.path.join(constr_score_dir,constr_score_file_name)
+    solve_info_path = os.path.join(solve_info_dir, solve_info_file_name)
+    with open(solve_info_path, "rb") as f:
+        solve_info = pickle.load(f)
     with open(pickle_path,"rb") as f:
         problem = pickle.load(f)
     with open(constr_score_path,"rb") as f:
@@ -166,17 +214,35 @@ for pickle_file_name,constr_score_file_name in zip(BG_files,constr_score_files):
     data_features.append(features)
 
     # 得到constr_label
+    ## 可以有多种方式
+    # 1.变量分数平均值
+    # constr_label = [0 for idx in range(m)]
+    # cnt = 0
+    # for pair in constr_score:
+    #     constr_idx = pair[0]
+    #     time_reduce = pair[1]
+    #     if cnt < k and time_reduce > threshold:
+    #         constr_label[constr_idx] = 1
+    #         cnt += 1
+
+    # 2.最好的子集
     constr_label = [0 for idx in range(m)]
     cnt = 0
-    for pair in constr_score:
-        constr_idx = pair[0]
-        time_reduce = pair[1]
-        if cnt < k and time_reduce > threshold:
-            constr_label[constr_idx] = 1
-            cnt += 1
+    # 找到最好的子集
+    best_subset_idx = -1
+    best_agg_time = 1e10
+    solve_info = solve_info[0]
+    for idx,subset_solve_info in enumerate(solve_info):
+        if best_agg_time > subset_solve_info[2]:
+            best_subset_idx = idx
+            best_agg_time = subset_solve_info[2]
+    best_subset = solve_info[best_subset_idx][0]
+    for constr_idx in best_subset:
+        constr_label[constr_idx] = 1
+
 
     # focal loss的权重
-    num_label = [1, 4]
+    num_label = [1, 10]
     # num_label = [1, 1]
     num_label = torch.as_tensor(num_label).to(device)
     data_labels.append(num_label)
@@ -256,13 +322,14 @@ best_epoch = 0
 model_save_path = f"./model/{task_name}"
 os.makedirs(model_save_path, exist_ok=True)
 
+now_time = time.time()
 for epoch in range(args.epochs):
     print("epoch:",epoch)
     model.train()
     optimizer.zero_grad()
     now_loss = 0
     # for i in range(5):
-    for i in range(100):
+    for i in range(20):
         now_data = random.randint(0, data_num - 1)
         now_loss += train(epoch, now_data)
     loss_values.append(now_loss)
@@ -274,7 +341,7 @@ for epoch in range(args.epochs):
     print('Epoch: {:04d}'.format(epoch+1),
           'loss_train: {:.4f}'.format(now_loss))
 
-    torch.save(model.state_dict(), model_save_path + f'/model_{best_loss}.pkl'.format(epoch))
+    torch.save(model.state_dict(), model_save_path + f'/model_{now_time}_{best_loss}.pkl'.format(epoch))
     if loss_values[-1] < best_loss:
         best_loss = loss_values[-1]
         best_epoch = epoch
@@ -301,8 +368,10 @@ print("Optimization Finished!")
 print("Total time elapsed: {:.4f}s".format(time.time() - t_total))
 
 # Restore best model
-print('Loading {}th epoch'.format(best_epoch))
-model.load_state_dict(torch.load('{}.pkl'.format(best_epoch)))
+# print('Loading {}th epoch'.format(best_epoch))
+# model.load_state_dict(torch.load('{}.pkl'.format(best_epoch)))
 
-print(loss_values)
+# print(loss_values)
+plot_and_save_loss(loss_values,"./loss.png")
+
 

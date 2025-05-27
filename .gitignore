@@ -6,3 +6,4 @@ result
 demo.py
 *.pickle
 dataset
+model

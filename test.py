@@ -1,4 +1,6 @@
 import os
+
+import parser_utils
 import utils
 import gurobipy as gp
 from gurobipy import GRB
@@ -9,6 +11,8 @@ import torch
 import argparse
 from torch.autograd import Variable
 import repair_func
+import pandas as pd
+
 
 # 读问题
 task_name = "CA_500_600"
@@ -21,25 +25,26 @@ lp_files.sort()  # 按文件名排序，确保顺序一致
 cache_dir = "./cache/test"
 Threads = 0
 solve_num = min(10,len(lp_files))
-cache = utils.load_cache(cache_dir, task_name, lp_dir_path, solve_num, Threads)
+# cache = utils.load_optimal_cache(cache_dir, task_name, lp_dir_path, solve_num, Threads)
+cache = utils.load_gap_cache(cache_dir, task_name, lp_dir_path, solve_num, Threads)
 
 # parser
 # testing settings
-parser = argparse.ArgumentParser()
-parser.add_argument('--no-cuda', action='store_true', default=False, help='Disables CUDA training.')
-parser.add_argument('--fastmode', action='store_true', default=False, help='Validate during training pass.')
-parser.add_argument('--seed', type=int, default=16, help='Random seed.')
-# parser.add_argument('--epochs', type=int, default=30, help='Number of epochs to train.')
-parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train.')
-parser.add_argument('--lr', type=float, default=1e-3, help='Initial learning rate.')
-parser.add_argument('--weight_decay', type=float, default=5e-3, help='Weight decay (L2 loss on parameters).')
-parser.add_argument('--hidden', type=int, default=64, help='Number of hidden units.')
-parser.add_argument('--nb_heads', type=int, default=6, help='Number of head attentions.')
-parser.add_argument('--dropout', type=float, default=0.5, help='Dropout rate (1 - keep probability).')
-parser.add_argument('--alpha', type=float, default=0.1, help='Alpha for the leaky_relu.')
-# parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
-parser.add_argument('--patience', type=int, default=20, help='Patience')
-
+# parser = argparse.ArgumentParser()
+# parser.add_argument('--no-cuda', action='store_true', default=False, help='Disables CUDA training.')
+# parser.add_argument('--fastmode', action='store_true', default=False, help='Validate during training pass.')
+# parser.add_argument('--seed', type=int, default=16, help='Random seed.')
+# # parser.add_argument('--epochs', type=int, default=30, help='Number of epochs to train.')
+# parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train.')
+# parser.add_argument('--lr', type=float, default=1e-3, help='Initial learning rate.')
+# parser.add_argument('--weight_decay', type=float, default=5e-3, help='Weight decay (L2 loss on parameters).')
+# parser.add_argument('--hidden', type=int, default=64, help='Number of hidden units.')
+# parser.add_argument('--nb_heads', type=int, default=6, help='Number of head attentions.')
+# parser.add_argument('--dropout', type=float, default=0.5, help='Dropout rate (1 - keep probability).')
+# parser.add_argument('--alpha', type=float, default=0.1, help='Alpha for the leaky_relu.')
+# # parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
+# parser.add_argument('--patience', type=int, default=20, help='Patience')
+parser = parser_utils.get_parser("test")
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = 'cpu'
@@ -47,7 +52,8 @@ device = 'cpu'
 results = []
 agg_num = 50
 repair_method = "lightmilp"
-
+result_dir = f"./result/{task_name}_test"
+os.makedirs(result_dir,exist_ok=True)
 for lp_file in lp_files[:solve_num]:
 
 
@@ -62,6 +68,8 @@ for lp_file in lp_files[:solve_num]:
         status_orig = entry['status_orig']
         obj_orig = entry['obj_orig']
         time_orig = entry['time_orig']
+        gap_at_hit_1pct = entry['gap_at_hit_1pct']
+        time_at_1pct_orig = entry['time_at_1pct']
     else:
         raise Exception("there is not cache")
 
@@ -93,6 +101,8 @@ for lp_file in lp_files[:solve_num]:
     m = len(constrs)
     sense_map = {'<': 1, '>': 2, '=': 3}
     k, site, value, constraint, constraint_type = [], [], [], [], []
+    constr_degree = []
+    variable_degree = [0 for i in range(n)]
     for c in constrs:
         row = model_agg.getRow(c)
         vars_in_row = [row.getVar(idx) for idx in range(row.size())]
@@ -103,7 +113,13 @@ for lp_file in lp_files[:solve_num]:
         value.append([float(co) for co in coeffs])
         constraint.append(c.RHS)
         constraint_type.append(sense_map[c.Sense])
+        constr_degree.append(row.size())  # 度
+        for idx in range(row.size()):
+            var = row.getVar(idx)
+            variable_degree[var.index] += 1
 
+    norm_variable_degree = utils.z_score_normalize(variable_degree)
+    norm_constr_degree = utils.z_score_normalize(constr_degree)
     # Bipartite graph encoding
     variable_features = []
     constraint_features = []
@@ -111,9 +127,10 @@ for lp_file in lp_files[:solve_num]:
     edge_features = []
 
     # print(value_type)
+    norn_coeff = utils.z_score_normalize(coefficient)
     for i in range(n):
         now_variable_features = []
-        now_variable_features.append(coefficient[i])
+        now_variable_features.append(norn_coeff[i])
         now_variable_features.append(0)  #
         now_variable_features.append(1)  # [0,1]代表变量
         if (value_type[i] == 'C'):
@@ -121,7 +138,12 @@ for lp_file in lp_files[:solve_num]:
         else:
             now_variable_features.append(1)
         now_variable_features.append(random.random())
+
+        # 度
+        now_variable_features.append(norm_variable_degree[i])
+
         variable_features.append(now_variable_features)
+
 
     for i in range(m):
         now_constraint_features = []
@@ -139,6 +161,14 @@ for lp_file in lp_files[:solve_num]:
             now_constraint_features.append(0)
             now_constraint_features.append(1)
         now_constraint_features.append(random.random())
+
+        # 度
+        now_constraint_features.append(norm_constr_degree[i])
+
+        # pos_emb
+        pos_emb = utils.decimal_to_binary_list(n, i)
+        now_constraint_features.extend(pos_emb)
+
         constraint_features.append(now_constraint_features)
 
     for i in range(m):
@@ -166,9 +196,15 @@ for lp_file in lp_files[:solve_num]:
     edgeB = torch.as_tensor(edgeB)
     edge_features = torch.as_tensor(edge_features)
 
-    for i in range(m):
-        for j in range(var_size - con_size):
-            constraint_features[i].append(0)
+    if var_size > con_size:
+        for i in range(m):
+            for j in range(var_size - con_size):
+                constraint_features[i].append(0)
+    else:
+        for i in range(n):
+            for j in range(con_size-var_size):
+                variable_features[i].append(0)
+
     features = variable_features + constraint_features
     features = torch.as_tensor(features).float()
 
@@ -192,7 +228,16 @@ for lp_file in lp_files[:solve_num]:
                   nheads=args.nb_heads,  # Number of heads
                   alpha=args.alpha)  # LeakyReLU alpha coefficient
 
-    nn_model.load_state_dict(torch.load(f"./model/{task_name}/model.pkl"))
+    """
+    model = SpGAT(nfeat=data_features[0].shape[1],    # Feature dimension
+            nhid=args.hidden,             # Feature dimension of each hidden layer
+            nclass=int(data_solution[0].max()) + 1, # Number of classes
+            dropout=args.dropout,         # Dropout
+            nheads=args.nb_heads,         # Number of heads
+            alpha=args.alpha)             # LeakyReLU alpha coefficient
+    """
+    # nn_model.load_state_dict(torch.load(f"./model/{task_name}/model__1747984351.7349272_1.5272091627120972.pkl"))
+    nn_model.load_state_dict(torch.load(f"./model/{task_name}/model_1748015205.913787_6.009954452514648.pkl"))
 
     if args.cuda:  # Move to GPU
         nn_model.to(device)
@@ -220,7 +265,7 @@ for lp_file in lp_files[:solve_num]:
 
 
     agg_constr_idx = [constr_idx_score[i][0] for i in range(agg_num)]
-    print("aa")
+
     # 聚合求解
     conss = model_agg.getConstrs()
     sample = [conss[constr_idx] for constr_idx in agg_constr_idx]
@@ -288,9 +333,13 @@ for lp_file in lp_files[:solve_num]:
                 # 修复后的作为start，松弛的用hintval
 
         # 求解（修复）,计算指标
-        repair_model.optimize()
-
+        # repair_model.setParam("TimeLimit", 2)
+        cb = utils.make_callback(lp_file, utils.all_metrics)
+        repair_model.optimize(cb)
         t1 = time.perf_counter()
+        time_perf_counter = utils.all_metrics[-1]['time_perf_counter']
+
+        time_agg_1pct = time_perf_counter - t0
         status_agg = repair_model.Status
         obj_agg = repair_model.ObjVal
         time_agg = t1 - t0
@@ -304,11 +353,13 @@ for lp_file in lp_files[:solve_num]:
             primal_gap = (obj_orig - obj_agg) / abs(obj_orig) if obj_orig != 0 else float("inf")
         time_reduce = (time_orig - time_agg) / time_orig if time_orig > 0 else 0
 
+        time_reduce_1pct = (time_at_1pct_orig - time_agg_1pct) / time_at_1pct_orig if  time_at_1pct_orig > 0 else 0
         print(f"原obj:{obj_orig},\t 聚合后obj：{obj_agg}")
         print(f"原时间:{time_orig},\t 聚合后时间:{time_agg}")
+        print(f"原1pct时间：{time_at_1pct_orig}, \t 聚合后1pct时间：{time_agg_1pct}")
         print(f"primal_gap:{primal_gap}")
         print(f"time_reduce:{time_reduce}")
-
+        print(f"1pct_time_reduce:{time_reduce_1pct}")
         # 保存
         results.append({
             "filename": lp_file,
@@ -323,9 +374,13 @@ for lp_file in lp_files[:solve_num]:
             "time_orig": time_orig,
             "time_agg": time_agg,
             "time_reduce": time_reduce,
+            "time_reduce_1pct":time_reduce_1pct,
+            "1pct_gap_vaule": utils.all_metrics[-1]['gap_at_hit'],
             "original_cons": cons_num_orig,
             "after_agg_cons": cons_num_agg,
         })
     # 和原始时间对比
-result_dir = f"./result/{task_name}"
-results.to_csv(result_dir + f"/surrogate_stats_aggnum_{agg_num}__repair_{repair_method}.csv", index=False)
+
+df = pd.DataFrame(results)
+df.to_csv(result_dir + f"/result.csv", index=False)
+

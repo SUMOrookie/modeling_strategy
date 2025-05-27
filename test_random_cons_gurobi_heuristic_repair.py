@@ -355,7 +355,7 @@ if __name__ == '__main__':
 
         # 读取cache
         cache_dir = "./cache"
-        cache = utils.load_cache(cache_dir,data_dir,lp_files_dir,solve_num,Threads)
+        cache = utils.load_optimal_cache(cache_dir, data_dir, lp_files_dir, solve_num, Threads)
         #
         # 每个seed，求解一次
         for seed in seed_list:

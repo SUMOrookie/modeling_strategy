@@ -229,7 +229,7 @@ def optimize(
 
     # cache
     cache_dir = "./cache/train"
-    cache = utils.load_cache(cache_dir, task_name, lp_dir_path, solve_num=len(lp_files), Threads=0)
+    cache = utils.load_optimal_cache(cache_dir, task_name, lp_dir_path, solve_num=len(lp_files), Threads=0)
 
     # dataset存放目录
     dataset_dir = f"./dataset/{task_name}"
@@ -353,7 +353,7 @@ def optimize(
         for i in range(n):
             now_variable_features = []
             # now_variable_features.append(coefficient[i])
-            now_variable_features.append(norm_coeff) # 归一化的系数
+            now_variable_features.append(norm_coeff[i]) # 归一化的系数
             now_variable_features.append(0) #
             now_variable_features.append(1) # [0,1]代表是变量
 

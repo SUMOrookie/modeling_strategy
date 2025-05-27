@@ -7,6 +7,36 @@ import gurobipy as gp
 import time
 import utils
 import math
+
+
+# 全局／外部列表，用来存所有 solve 的 metrics
+all_metrics = []
+def make_callback(solve_id, metrics_list):
+    """返回一个回调函数，该回调会把当前 solve 的时间和 gap 存到 metrics_list."""
+    info = {"solve_id": solve_id,
+            "hit": False,        # 是否已经记录过
+            "time_at_1pct": None,
+            "gap_at_hit": None}
+    metrics_list.append(info)
+
+    start = time.perf_counter()
+    def cb(model, where):
+        if where == GRB.Callback.MIP and not info["hit"]:
+            best = model.cbGet(GRB.Callback.MIP_OBJBST)
+            bound = model.cbGet(GRB.Callback.MIP_OBJBND)
+            if abs(best) > 1e-6:
+                gap = abs(best - bound) / abs(best)
+            else:
+                gap = float("inf")
+            if gap <= 0.01:
+                info["hit"] = True
+                now = time.perf_counter()
+                info["time_perf_counter"] = now
+                info["time_at_1pct"] = now - start
+                info["gap_at_hit"]  = gap
+
+    return cb
+
 def get_a_assignmeng_lp():
     # 利用随机数创建一个成本矩阵cost_matrix
     driver_num = job_num = 5
@@ -47,6 +77,35 @@ def get_a_assignmeng_lp():
             f.addTerms(1, x[i][j])  # 一列的01变量之和为1
 
     model.write("test_lp.lp")
+def decimal_to_binary_list(n, i):
+    """
+    将十进制整数 i 转换为二进制列表，确保列表长度与 n-1 的二进制位数相同。
+
+    参数:
+    n (int): 用于确定二进制位数的上限值（生成的二进制位数与 n-1 的位数相同）
+    i (int): 需要转换的十进制整数
+
+    返回:
+    list: 包含二进制字符的列表，长度与 n-1 的二进制位数相同
+    """
+    if n <= 0:
+        raise ValueError("n 必须是正整数")
+
+    # 计算所需的位数（即 n-1 的二进制位数）
+    max_bits = len(bin(n - 1)) - 2  # 减2是因为bin()返回的字符串前缀是 '0b'
+
+    # 将 i 转换为指定位数的二进制字符串，并拆分为列表
+    return [int(c) for c in format(i, f'0{max_bits}b')]
+
+def z_score_normalize(lst):
+    if not lst:
+        return []
+    mean = sum(lst) / len(lst)
+    variance = sum((x - mean) ** 2 for x in lst) / len(lst)
+    std_dev = variance ** 0.5
+    if std_dev == 0:  # 处理所有元素相同的情况
+        return [0.0] * len(lst)
+    return [(x - mean) / std_dev for x in lst]
 
 
 def gen_primes(n):
@@ -104,7 +163,73 @@ def get_solving_cache(cache:dict,cache_file:str,directory: str, num_problems: in
             with open(cache_file, 'w') as f:
                 json.dump(cache, f, indent=2)
 
-def load_cache(cache_dir,data_dir,lp_files_dir,solve_num,Threads=0):
+def get_gap_cache(cache,cache_file,lp_dir_path, solve_num,Threads):
+    # 获取目录下所有的 .lp 文件
+    lp_files = [f for f in os.listdir(lp_dir_path) if f.endswith('.lp')]
+    lp_files.sort()  # 按文件名排序，确保顺序一致
+
+    # 限制读取的文件数量
+    lp_files = lp_files[:solve_num]
+
+    # 依次读取并求解每个 .lp 文件
+    for lp_file in lp_files:
+        # 得到lp路径
+        lp_path = os.path.join(lp_dir_path, lp_file)
+        print(f"Processing {lp_file} cache")
+
+        ## 原问题求解
+        # 如果缓存中已有结果，就直接读取，否则求解并写入缓存
+        if lp_path in cache:
+            pass
+        else:
+            print("------------there is not cache, solving-------------")
+            # 读入模型
+            model_orig = gp.read(lp_path)
+
+            # 时间从读入开始算,求解
+            model_orig.setParam("Threads", Threads)
+            # model_orig.setParam("MIPGap", 1e-2)
+            t0 = time.perf_counter()
+
+            # 记录是否已经输出过信息
+            cb = make_callback(lp_file, all_metrics)
+            model_orig.optimize(cb)
+            t1 = time.perf_counter()
+
+            # 指标
+            obj_sense = model_orig.ModelSense
+            status_orig = model_orig.Status
+            obj_orig = model_orig.ObjVal
+            time_gap1_orig = t1 - t0
+
+            # 写入缓存
+            cache[lp_path] = {
+                'obj_sense':   obj_sense,
+                'status_orig': status_orig,
+                'obj_orig':    obj_orig,
+                'time_orig':   time_gap1_orig,
+                'gap_at_hit_1pct':all_metrics[-1]['gap_at_hit'],
+                'hit':all_metrics[-1]['hit'],
+                'time_at_1pct':all_metrics[-1]['time_at_1pct']
+            }
+            with open(cache_file, 'w') as f:
+                json.dump(cache, f, indent=2)
+def load_gap_cache(cache_dir, task_name, lp_dir_path, solve_num, Threads):
+    os.makedirs(cache_dir,exist_ok=True)
+    cache_file = os.path.join(cache_dir,f'{task_name}_solve_gap_cache.json')
+
+    # 加载缓存（如果存在）
+    if os.path.exists(cache_file):
+        with open(cache_file, 'r') as f:
+            cache = json.load(f)
+    else:
+        cache = {}
+
+    # utils.get_solving_cache(cache,cache_file,lp_dir_path, solve_num,Threads)
+    get_gap_cache(cache,cache_file,lp_dir_path, solve_num,Threads)
+    return cache
+
+def load_optimal_cache(cache_dir, data_dir, lp_files_dir, solve_num, Threads=0):
 
     os.makedirs(cache_dir,exist_ok=True)
     cache_file = os.path.join(cache_dir,f'{data_dir}_solve_cache.json')
