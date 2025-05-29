@@ -16,7 +16,9 @@ def make_callback(solve_id, metrics_list):
     info = {"solve_id": solve_id,
             "hit": False,        # 是否已经记录过
             "time_at_1pct": None,
-            "gap_at_hit": None}
+            "gap_at_hit": None,
+            "time_perf_counter":None}
+
     metrics_list.append(info)
 
     start = time.perf_counter()
@@ -322,9 +324,10 @@ def aggregate_constr(model_agg,agg_num=None,sample=None):
         agg_num = 50
 
     # 乘子
-    primes = utils.gen_primes(agg_num)
-    u_list = [math.log(p) for p in primes]
+    # primes = utils.gen_primes(agg_num)
+    # u_list = [math.log(p) for p in primes]
 
+    u_list = [1 for i in range(agg_num)]
     # 计算聚合约束
     agg_coeffs_leq = {}
     agg_rhs_leq = 0.0

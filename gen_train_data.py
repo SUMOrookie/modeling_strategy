@@ -239,9 +239,10 @@ def optimize(
     for lp_file in lp_files:
 
         # # 如果已经有了，就跳过
-        # if os.path.exists(dataset_dir + f"/{lp_file.rsplit('.',1)[0]}" + '.pickle'):
-        #     # continue
-        #     pass
+        if os.path.exists(dataset_dir + "/constr_score_multiplier_1" +f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle'):
+            print("continue")
+            continue
+
 
 
         # 读取问题
@@ -407,17 +408,17 @@ def optimize(
 
         sample_round = 40
         k = 50
-        # constr_score, subset_and_timereduce = gen_constr_label(lp_path, cache,sample_round,k)
+        constr_score, subset_and_timereduce = gen_constr_label(lp_path, cache,sample_round,k)
 
         os.makedirs(dataset_dir + f"/BG",exist_ok=True)
-        os.makedirs(dataset_dir + f"/constr_score", exist_ok=True)
+        os.makedirs(dataset_dir + f"/constr_score_multiplier_1", exist_ok=True)
         os.makedirs(dataset_dir + f"/solve_info", exist_ok=True)
         with open(dataset_dir + f"/BG" + f"/{lp_file.rsplit('.',1)[0]}_BG" + '.pickle', 'wb') as f:
                 pickle.dump([variable_features, constraint_features, edge_indices, edge_features], f)
-        # with open(dataset_dir + f"/constr_score" + f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle', 'wb') as f:
-        #         pickle.dump([constr_score], f)
-        # with open(dataset_dir + f"/solve_info" + f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle', 'wb') as f:
-        #         pickle.dump([subset_and_timereduce], f)
+        with open(dataset_dir + f"/constr_score_multiplier_1" + f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle', 'wb') as f:
+                pickle.dump([constr_score], f)
+        with open(dataset_dir + f"/solve_info" + f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle', 'wb') as f:
+                pickle.dump([subset_and_timereduce], f)
 
 
 def parse_args():

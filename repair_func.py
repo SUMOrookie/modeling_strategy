@@ -195,9 +195,16 @@ def heuristic_repair_light_MILP(repair_model,value_dict,lp_path):
         #     print(sense)
         # 根据约束类型判断是否违反
         if sense == "<":
+            # var_order = [[varname, value_dict[varname] * var_coeffs_in_constr[varname]] for varname in
+            #              var_coeffs_in_constr.keys() if value_dict[varname] != None]
+            # var_order.sort(key=lambda x: x[1], reverse=False)  # 越靠后越大
             if lhs_value > rhs:
                 valid = 0
-                # 违反，全部释放？
+                # 并非全部释放
+                # item = var_order.pop()
+                # value_dict[item[0]] = None
+                # lhs_value -= item[1]
+                # 违反，全部释放
                 for varname in var_coeffs_in_constr.keys():
                     if value_dict[varname] != None:
                         value_dict[varname] = None

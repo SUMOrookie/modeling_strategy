@@ -323,23 +323,62 @@ for lp_file in lp_files[:solve_num]:
         ## 修复后，作为原模型初始解求解，也就是再接入求解器
         print("------------PostSolve-------------")
         # 赋初始值
+
+        # 参数
+        k0 = 30  # 选择预测为 0 中的前 k0 个最“确信为0”的变量
+        k1 = 30  # 选择预测为 1 中的前 k1 个最“确信为1”的变量
+        Delta = 10  # 邻域半径上界
+        k0_cnt = 0
+        k1_cnt = 0
+        delta_var_list = []
         if repair_method != "gurobi":
             repair_Vars = repair_model.getVars()
             for idx in range(len(repair_Vars)):
                 varname = repair_Vars[idx].VarName
                 if vaule_dict[varname] != None:
-                    repair_model.getVarByName(varname).Start = vaule_dict[varname]
+                    # 给初始值
+                    # repair_model.getVarByName(varname).Start = vaule_dict[varname]
+
+                    # 直接固定
+                    # var = repair_model.getVarByName(varname)
+                    # var.LB = vaule_dict[varname]
+                    # var.UB = vaule_dict[varname]
+
+                    # 加邻域的固定
+                    if abs(vaule_dict[varname]) == 0.0 and k0_cnt < k0:
+                        var = repair_model.getVarByName(varname)
+                        var_delta = repair_model.addVar(vtype=GRB.BINARY,name=f"k0_{k0_cnt}")
+                        repair_model.addConstr(var<=var_delta,name=f"region_k0_{k0_cnt}")
+                        k0_cnt+=1
+                        delta_var_list.append(var_delta)
+                    elif vaule_dict[varname] == 1.0 and k1_cnt < k1:
+                        var = repair_model.getVarByName(varname)
+                        var_delta = repair_model.addVar(vtype=GRB.BINARY, name=f"k1_{k1_cnt}")
+                        repair_model.addConstr((1-var) <= var_delta, name=f"region_k1_{k1_cnt}")
+                        k1_cnt += 1
+                        delta_var_list.append(var_delta)
+                    else:
+                        pass
+        print(f"k0:{k0_cnt},\t,k1:{k1_cnt}")
                 # repair_Vars[idx].VarHintVal  = vaule_list[idx]
                 # 修复后的作为start，松弛的用hintval
+        # 半径约束
+        repair_model.addConstr(
+            gp.quicksum(d for d in delta_var_list) <= Delta,
+            name="radius"
+        )
 
+        repair_model.update()
         # 求解（修复）,计算指标
         # repair_model.setParam("TimeLimit", 2)
         cb = utils.make_callback(lp_file, utils.all_metrics)
         repair_model.optimize(cb)
         t1 = time.perf_counter()
-        time_perf_counter = utils.all_metrics[-1]['time_perf_counter']
-
-        time_agg_1pct = time_perf_counter - t0
+        if utils.all_metrics[-1]["hit"] != False:
+            time_perf_counter = utils.all_metrics[-1]['time_perf_counter']
+            time_agg_1pct = time_perf_counter - t0
+        else:
+            time_agg_1pct = None
         status_agg = repair_model.Status
         obj_agg = repair_model.ObjVal
         time_agg = t1 - t0
@@ -353,7 +392,10 @@ for lp_file in lp_files[:solve_num]:
             primal_gap = (obj_orig - obj_agg) / abs(obj_orig) if obj_orig != 0 else float("inf")
         time_reduce = (time_orig - time_agg) / time_orig if time_orig > 0 else 0
 
-        time_reduce_1pct = (time_at_1pct_orig - time_agg_1pct) / time_at_1pct_orig if  time_at_1pct_orig > 0 else 0
+        if utils.all_metrics[-1]["hit"] != False:
+            time_reduce_1pct = (time_at_1pct_orig - time_agg_1pct) / time_at_1pct_orig if  time_at_1pct_orig > 0 else 0
+        else:
+            time_reduce_1pct = None
         print(f"原obj:{obj_orig},\t 聚合后obj：{obj_agg}")
         print(f"原时间:{time_orig},\t 聚合后时间:{time_agg}")
         print(f"原1pct时间：{time_at_1pct_orig}, \t 聚合后1pct时间：{time_agg_1pct}")
