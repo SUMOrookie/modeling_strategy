@@ -213,14 +213,7 @@ def optimize(
     time: int,
     number: int,
 ):
-    '''
-    Function description:
-    Designs and calls a specified algorithm and solver to optimize the problem stored in data.pickle in the same directory, based on the provided parameters.
 
-    Parameter descriptions:
-    - time: Time allotted per instance for Gurobi to find reference solutions.
-    - number: Integer type, indicates the number of instances to be generated.
-    '''
     task_name = "CA_500_600"
     lp_dir_path = f"./instance/train/{task_name}"
     os.makedirs(f"./parsed/train/{task_name}", exist_ok=True)
@@ -235,23 +228,24 @@ def optimize(
     dataset_dir = f"./dataset/{task_name}"
     os.makedirs(dataset_dir,exist_ok=True)
 
+    #
+    BG_folder = "/BG"
+    constr_score_folder = "/constr_score_multiplier_1"
+    solve_info_folder = "/solve_info"
+
     # 依次读取并每个 .lp 文件
     for lp_file in lp_files:
 
-        # # 如果已经有了，就跳过
-        if os.path.exists(dataset_dir + "/constr_score_multiplier_1" +f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle'):
+        # # 如果已经有了constr_score，就跳过
+        if os.path.exists(dataset_dir + constr_score_folder +f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle'):
             print("continue")
             continue
-
-
 
         # 读取问题
         lp_path = os.path.join(lp_dir_path, lp_file)
         model = gp.read(lp_path)
 
 
-
-        ## 得到二部图
         # obj sense
         obj_type = model.ModelSense
         if obj_type == GRB.MINIMIZE:
@@ -260,6 +254,20 @@ def optimize(
             obj_type = 'maximize'
         else:
             raise Exception("unknown obj sense")
+
+        ## 描述
+        # n represents the number of decision variables
+        # m represents the number of constraints
+        # k[i] represents the number of decision variables in the ith constraint
+        # site[i][j] represents the decision variable in the jth position of the ith constraint
+        # value[i][j] represents the coefficient of the jth decision variable in the ith constraint
+        # constraint[i] represents the right-hand side value of the ith constraint
+        # constraint_type[i] represents the type of the ith constraint, where 1 is <=, 2 is >=
+        # coefficient[i] represents the coefficient of the ith decision variable in the objective function
+        # lower_bound[i] represents the lower bound of the range for the ith decision variable.
+        # upper_bound[i] represents the upper bound of the range for the ith decision variable.
+        # value_type[i] represents the type of the ith decision variable, 'B' for binary variable, 'I' for integer variable, 'C' for continuous variable.
+
 
         # 获取变量信息
         vars = model.getVars()
@@ -295,47 +303,11 @@ def optimize(
 
         norm_variable_degree = z_score_normalize(variable_degree)
         norm_constr_degree = z_score_normalize(constr_degree)
-        # parsed = {
-        #     'obj_type':obj_type,
-        #     'n': n, 'm': m, 'k': k, 'site': site, 'value': value,
-        #     'constraint': constraint, 'constraint_type': constraint_type,
-        #     'coefficient': coefficient, 'lower_bound': lower_bound,
-        #     'upper_bound': upper_bound, 'value_type': value_type
-        # }
-        # with open(f"./parsed/train/CA_500_600/{os.path.splitext(lp_file)[0]}.pickle", "wb") as f:
-        #     pickle.dump(parsed, f)
-
-        ## 描述
-        # n represents the number of decision variables
-        # m represents the number of constraints
-        # k[i] represents the number of decision variables in the ith constraint
-        # site[i][j] represents the decision variable in the jth position of the ith constraint
-        # value[i][j] represents the coefficient of the jth decision variable in the ith constraint
-        # constraint[i] represents the right-hand side value of the ith constraint
-        # constraint_type[i] represents the type of the ith constraint, where 1 is <=, 2 is >=
-        # coefficient[i] represents the coefficient of the ith decision variable in the objective function
-        # lower_bound[i] represents the lower bound of the range for the ith decision variable.
-        # upper_bound[i] represents the upper bound of the range for the ith decision variable.
-        # value_type[i] represents the type of the ith decision variable, 'B' for binary variable, 'I' for integer variable, 'C' for continuous variable.
 
 
-        # n = data[1]
-        # m = data[2]
-        # k = data[3]
-        # site = data[4]
-        # value = data[5]
-        # constraint = data[6]
-        # constraint_type = data[7]
-        # coefficient = data[8]
-        # lower_bound = data[9]
-        # upper_bound = data[10]
-        # value_type = data[11]
-        # obj_type = data[0]
 
-        # 改成其他的标签
-        # 例如约束的分数
+        # 这个函数是用来得到最优解
         # optimal_solution = Gurobi_solver(n, m, k, site, value, constraint, constraint_type, coefficient, time, obj_type, lower_bound, upper_bound, value_type)
-
 
         # Bipartite graph encoding
         variable_features = []
@@ -349,8 +321,9 @@ def optimize(
 
 
         #print(value_type)
-        # 做归一化
+        # 归一化
         norm_coeff = z_score_normalize(coefficient)
+        ## 变量原始特征
         for i in range(n):
             now_variable_features = []
             # now_variable_features.append(coefficient[i])
@@ -371,7 +344,8 @@ def optimize(
 
             # 还差：在约束中的平均系数，最大系数，最小系数
             variable_features.append(now_variable_features)
-        
+
+        # 约束原始特征
         for i in range(m):
             now_constraint_features = []
             now_constraint_features.append(constraint[i]) # 右端项
@@ -406,18 +380,21 @@ def optimize(
                 edge_indices[1].append(site[i][j])
                 edge_features.append([value[i][j]])
 
-        sample_round = 40
-        k = 50
+
+        ## 约束标签采集
+        sample_round = 40 # 采样此时
+        k = 50 # 约束子集大小
         constr_score, subset_and_timereduce = gen_constr_label(lp_path, cache,sample_round,k)
 
-        os.makedirs(dataset_dir + f"/BG",exist_ok=True)
-        os.makedirs(dataset_dir + f"/constr_score_multiplier_1", exist_ok=True)
-        os.makedirs(dataset_dir + f"/solve_info", exist_ok=True)
-        with open(dataset_dir + f"/BG" + f"/{lp_file.rsplit('.',1)[0]}_BG" + '.pickle', 'wb') as f:
+        # 保存
+        os.makedirs(dataset_dir + BG_folder,exist_ok=True)
+        os.makedirs(dataset_dir + constr_score_folder, exist_ok=True)
+        os.makedirs(dataset_dir + solve_info_folder, exist_ok=True)
+        with open(dataset_dir + BG_folder + f"/{lp_file.rsplit('.',1)[0]}_BG" + '.pickle', 'wb') as f:
                 pickle.dump([variable_features, constraint_features, edge_indices, edge_features], f)
-        with open(dataset_dir + f"/constr_score_multiplier_1" + f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle', 'wb') as f:
+        with open(dataset_dir + constr_score_folder + f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle', 'wb') as f:
                 pickle.dump([constr_score], f)
-        with open(dataset_dir + f"/solve_info" + f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle', 'wb') as f:
+        with open(dataset_dir + solve_info_folder + f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle', 'wb') as f:
                 pickle.dump([subset_and_timereduce], f)
 
 
@@ -430,7 +407,7 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    args = parse_args()
+    args = parse_args() # 用不上
     #print(vars(args))
     optimize(**vars(args))
 

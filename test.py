@@ -1,5 +1,4 @@
 import os
-
 import parser_utils
 import utils
 import gurobipy as gp
@@ -44,6 +43,8 @@ cache = utils.load_gap_cache(cache_dir, task_name, lp_dir_path, solve_num, Threa
 # parser.add_argument('--alpha', type=float, default=0.1, help='Alpha for the leaky_relu.')
 # # parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
 # parser.add_argument('--patience', type=int, default=20, help='Patience')
+
+# 从parser_utils中获取parser，是为了保证train和test的网络结构一致
 parser = parser_utils.get_parser("test")
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -54,6 +55,13 @@ agg_num = 50
 repair_method = "lightmilp"
 result_dir = f"./result/{task_name}_test"
 os.makedirs(result_dir,exist_ok=True)
+
+# neighborhood config
+# 领域的参数
+k0 = 30  # k0个为0的变量
+k1 = 30  # k1个为1的变量
+Delta = 30  # 邻域半径上界
+
 for lp_file in lp_files[:solve_num]:
 
 
@@ -68,7 +76,7 @@ for lp_file in lp_files[:solve_num]:
         status_orig = entry['status_orig']
         obj_orig = entry['obj_orig']
         time_orig = entry['time_orig']
-        gap_at_hit_1pct = entry['gap_at_hit_1pct']
+        gap_at_hit_1pct = entry['gap_at_hit_1pct'] # 这个和下面的本来是想看看求解到1%gap的时候是否会有提升的，但目前看来和0%gap区别不大
         time_at_1pct_orig = entry['time_at_1pct']
     else:
         raise Exception("there is not cache")
@@ -120,6 +128,7 @@ for lp_file in lp_files[:solve_num]:
 
     norm_variable_degree = utils.z_score_normalize(variable_degree)
     norm_constr_degree = utils.z_score_normalize(constr_degree)
+
     # Bipartite graph encoding
     variable_features = []
     constraint_features = []
@@ -228,15 +237,7 @@ for lp_file in lp_files[:solve_num]:
                   nheads=args.nb_heads,  # Number of heads
                   alpha=args.alpha)  # LeakyReLU alpha coefficient
 
-    """
-    model = SpGAT(nfeat=data_features[0].shape[1],    # Feature dimension
-            nhid=args.hidden,             # Feature dimension of each hidden layer
-            nclass=int(data_solution[0].max()) + 1, # Number of classes
-            dropout=args.dropout,         # Dropout
-            nheads=args.nb_heads,         # Number of heads
-            alpha=args.alpha)             # LeakyReLU alpha coefficient
-    """
-    # nn_model.load_state_dict(torch.load(f"./model/{task_name}/model__1747984351.7349272_1.5272091627120972.pkl"))
+
     nn_model.load_state_dict(torch.load(f"./model/{task_name}/model_1748015205.913787_6.009954452514648.pkl"))
 
     if args.cuda:  # Move to GPU
@@ -254,15 +255,16 @@ for lp_file in lp_files[:solve_num]:
     edgeA = Variable(edgeA)
     edgeB = Variable(edgeB)
     # Define computation graph for automatic differentiation
-
     output, _ = nn_model(features, edgeA, edgeB,edge_features.detach())
+    time_network_finish = time.perf_counter()
+    time_network = time_network_finish - t0
+
 
     ## 聚合
     # 得到需要聚合的约束
     constr_score = output[idx_train].detach().numpy().tolist()
     constr_idx_score =  [[idx,item[1]]for idx,item in enumerate(constr_score)]
     constr_idx_score.sort(key=lambda x:x[1], reverse=True)
-
 
     agg_constr_idx = [constr_idx_score[i][0] for i in range(agg_num)]
 
@@ -275,93 +277,82 @@ for lp_file in lp_files[:solve_num]:
 
     print("------------solving agg model-------------")
     model_agg.setParam("Threads", Threads)
-    model_solve_time = 2
-    if model_solve_time == -1:
+    agg_model_solve_time = args.agg_model_solve_time
+    if agg_model_solve_time == -1:
         model_agg.optimize()
     else:
-        model_agg.setParam("TimeLimit", model_solve_time)
+        model_agg.setParam("TimeLimit", agg_model_solve_time)
         model_agg.optimize()
+    time_solve_agg_model_finish = time.perf_counter()
+    time_solve_agg_model = time_solve_agg_model_finish - time_network_finish
+
     agg_objval_original = model_agg.ObjVal
 
     # 获得变量值
     Vars = model_agg.getVars()
     vaule_dict = {var.VarName: var.X for var in Vars}
 
-    # 读入新模型，用于修复
+    # 读入新模型，用于解的可行性修复
     repair_model = gp.read(lp_path)
     repair_model.setParam("Threads", Threads)
 
-    # todo：gurobi修复，并且求到最优解与否
-    # 如果gurobi and postsolve：不设置SolutionLimit
-    # 如果gurobi and not postsolve：设置SolutionLimit
-    # 其他情况，调用对应的启发式函数
-    # 然后判断postsolve
-
-    PostSolve = True
-    if repair_method == "gurobi":
-        if PostSolve:
-            pass
-        else:
-            # gurobi修复
-            repair_model.setParam('SolutionLimit', 1)
+    if repair_method == "naive":
+        # 简单的启发式修复
+        vaule_dict = repair_func.heuristic_repair(repair_model, vaule_dict)
+    elif repair_method == "score":
+        # 变量评分
+        vaule_dict = repair_func.heuristic_repair_with_score(repair_model, vaule_dict)
+    elif repair_method == "subproblem":
+        vaule_dict = repair_func.heuristic_repair_subproblem(repair_model, vaule_dict)
+    elif repair_method == "lightmilp":
+        vaule_dict = repair_func.heuristic_repair_light_MILP(repair_model, vaule_dict, lp_path)
     else:
-        if repair_method == "naive":
-            # 简单的启发式修复
-            vaule_dict = repair_func.heuristic_repair(repair_model, vaule_dict)
-        elif repair_method == "score":
-            # 变量评分
-            vaule_dict = repair_func.heuristic_repair_with_score(repair_model, vaule_dict)
-        elif repair_method == "subproblem":
-            vaule_dict = repair_func.heuristic_repair_subproblem(repair_model, vaule_dict)
-        elif repair_method == "lightmilp":
-            vaule_dict = repair_func.heuristic_repair_light_MILP(repair_model, vaule_dict, lp_path)
-        else:
-            raise Exception("unknown repair_method")
+        raise Exception("unknown repair_method")
+    time_repair_finish = time.perf_counter()
+    time_repair = time_repair_finish - time_solve_agg_model_finish
 
-    # postsolve的意思是，接入原模型，求解至最优解
+
+    # postsolve的意思是，接入原模型，求解。不一定会求解到最优。
+    PostSolve = True
     if PostSolve:
         ## 修复后，作为原模型初始解求解，也就是再接入求解器
         print("------------PostSolve-------------")
         # 赋初始值
 
-        # 参数
-        k0 = 30  # 选择预测为 0 中的前 k0 个最“确信为0”的变量
-        k1 = 30  # 选择预测为 1 中的前 k1 个最“确信为1”的变量
-        Delta = 10  # 邻域半径上界
+
         k0_cnt = 0
         k1_cnt = 0
         delta_var_list = []
-        if repair_method != "gurobi":
-            repair_Vars = repair_model.getVars()
-            for idx in range(len(repair_Vars)):
-                varname = repair_Vars[idx].VarName
-                if vaule_dict[varname] != None:
-                    # 给初始值
-                    # repair_model.getVarByName(varname).Start = vaule_dict[varname]
 
-                    # 直接固定
-                    # var = repair_model.getVarByName(varname)
-                    # var.LB = vaule_dict[varname]
-                    # var.UB = vaule_dict[varname]
+        repair_Vars = repair_model.getVars()
+        for idx in range(len(repair_Vars)):
+            varname = repair_Vars[idx].VarName
+            if vaule_dict[varname] != None:
+                # 给初始值
+                # repair_model.getVarByName(varname).Start = vaule_dict[varname]
 
-                    # 加邻域的固定
-                    if abs(vaule_dict[varname]) == 0.0 and k0_cnt < k0:
-                        var = repair_model.getVarByName(varname)
-                        var_delta = repair_model.addVar(vtype=GRB.BINARY,name=f"k0_{k0_cnt}")
-                        repair_model.addConstr(var<=var_delta,name=f"region_k0_{k0_cnt}")
-                        k0_cnt+=1
-                        delta_var_list.append(var_delta)
-                    elif vaule_dict[varname] == 1.0 and k1_cnt < k1:
-                        var = repair_model.getVarByName(varname)
-                        var_delta = repair_model.addVar(vtype=GRB.BINARY, name=f"k1_{k1_cnt}")
-                        repair_model.addConstr((1-var) <= var_delta, name=f"region_k1_{k1_cnt}")
-                        k1_cnt += 1
-                        delta_var_list.append(var_delta)
-                    else:
-                        pass
+                # 直接固定
+                # var = repair_model.getVarByName(varname)
+                # var.LB = vaule_dict[varname]
+                # var.UB = vaule_dict[varname]
+
+                # 加邻域的固定
+                if abs(vaule_dict[varname]) == 0.0 and k0_cnt < k0:
+                    var = repair_model.getVarByName(varname)
+                    var_delta = repair_model.addVar(vtype=GRB.BINARY,name=f"k0_{k0_cnt}")
+                    repair_model.addConstr(var<=var_delta,name=f"region_k0_{k0_cnt}")
+                    k0_cnt+=1
+                    delta_var_list.append(var_delta)
+                elif vaule_dict[varname] == 1.0 and k1_cnt < k1:
+                    var = repair_model.getVarByName(varname)
+                    var_delta = repair_model.addVar(vtype=GRB.BINARY, name=f"k1_{k1_cnt}")
+                    repair_model.addConstr((1-var) <= var_delta, name=f"region_k1_{k1_cnt}")
+                    k1_cnt += 1
+                    delta_var_list.append(var_delta)
+                else:
+                    pass
         print(f"k0:{k0_cnt},\t,k1:{k1_cnt}")
-                # repair_Vars[idx].VarHintVal  = vaule_list[idx]
-                # 修复后的作为start，松弛的用hintval
+
         # 半径约束
         repair_model.addConstr(
             gp.quicksum(d for d in delta_var_list) <= Delta,
@@ -369,11 +360,14 @@ for lp_file in lp_files[:solve_num]:
         )
 
         repair_model.update()
-        # 求解（修复）,计算指标
+
+        # 求解,计算指标
         # repair_model.setParam("TimeLimit", 2)
         cb = utils.make_callback(lp_file, utils.all_metrics)
         repair_model.optimize(cb)
         t1 = time.perf_counter()
+        time_warm_start_solve = t1 - time_repair_finish
+
         if utils.all_metrics[-1]["hit"] != False:
             time_perf_counter = utils.all_metrics[-1]['time_perf_counter']
             time_agg_1pct = time_perf_counter - t0
@@ -381,7 +375,7 @@ for lp_file in lp_files[:solve_num]:
             time_agg_1pct = None
         status_agg = repair_model.Status
         obj_agg = repair_model.ObjVal
-        time_agg = t1 - t0
+        total_time_agg = t1 - t0
 
         ## gap、时间约简计算
         if obj_sense == GRB.MINIMIZE:
@@ -390,14 +384,14 @@ for lp_file in lp_files[:solve_num]:
         else:
             print("最大化问题")
             primal_gap = (obj_orig - obj_agg) / abs(obj_orig) if obj_orig != 0 else float("inf")
-        time_reduce = (time_orig - time_agg) / time_orig if time_orig > 0 else 0
+        time_reduce = (time_orig - total_time_agg) / time_orig if time_orig > 0 else 0
 
         if utils.all_metrics[-1]["hit"] != False:
             time_reduce_1pct = (time_at_1pct_orig - time_agg_1pct) / time_at_1pct_orig if  time_at_1pct_orig > 0 else 0
         else:
             time_reduce_1pct = None
         print(f"原obj:{obj_orig},\t 聚合后obj：{obj_agg}")
-        print(f"原时间:{time_orig},\t 聚合后时间:{time_agg}")
+        print(f"原时间:{time_orig},\t 聚合后时间:{total_time_agg}")
         print(f"原1pct时间：{time_at_1pct_orig}, \t 聚合后1pct时间：{time_agg_1pct}")
         print(f"primal_gap:{primal_gap}")
         print(f"time_reduce:{time_reduce}")
@@ -414,7 +408,11 @@ for lp_file in lp_files[:solve_num]:
             "after_cons_num": cons_num_agg,
             "cons_reduce_ratio": (cons_num_orig - cons_num_agg) / cons_num_orig,
             "time_orig": time_orig,
-            "time_agg": time_agg,
+            "time_network":time_network,
+            "time_solve_agg_model":time_solve_agg_model,
+            "time_repair":time_repair,
+            "time_warm_start_solve":time_warm_start_solve,
+            "time_agg": total_time_agg,
             "time_reduce": time_reduce,
             "time_reduce_1pct":time_reduce_1pct,
             "1pct_gap_vaule": utils.all_metrics[-1]['gap_at_hit'],
@@ -424,5 +422,5 @@ for lp_file in lp_files[:solve_num]:
     # 和原始时间对比
 
 df = pd.DataFrame(results)
-df.to_csv(result_dir + f"/result.csv", index=False)
+df.to_csv(result_dir + f"/result_k0_{k0}_k1_{k1}_delta_{Delta}.csv", index=False)
 

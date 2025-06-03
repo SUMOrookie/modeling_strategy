@@ -10,7 +10,7 @@ def get_parser(flag):
         raise Exception("")
     parser.add_argument('--no-cuda', action='store_true', default=False, help='Disables CUDA training.')
     parser.add_argument('--fastmode', action='store_true', default=False, help='Validate during training pass.')
-
+    parser.add_argument('--agg_model_solve_time', type=int, default=2,help='约束聚合模型的求解时间限制，如果是-1，那么不限制')
     # parser.add_argument('--epochs', type=int, default=30, help='Number of epochs to train.')
     parser.add_argument('--epochs', type=int, default=999, help='Number of epochs to train.')
     parser.add_argument('--lr', type=float, default=1e-5, help='Initial learning rate.')
