@@ -1,6 +1,8 @@
+import random
+
 from gurobipy import GRB
 import gurobipy as gp
-
+import utils
 def compute_scores(model, varname_objc_map,value_dict, violation_count, c_mean,sense):
     """
     计算每个取值为1变量的评分：
@@ -269,3 +271,56 @@ def heuristic_repair_light_MILP(repair_model,value_dict,lp_path):
                     # print("---")
             # raise Exception("不可行")
     return value_dict
+
+
+def PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,seed = random.randint(1,9999)):
+    ## 修复后，作为原模型初始解求解，也就是再接入求解器
+    print("------------PostSolve-------------")
+    # 赋初始值
+
+    k0_cnt = 0
+    k1_cnt = 0
+    delta_var_list = []
+
+    repair_Vars = repair_model.getVars()
+    for idx in range(len(repair_Vars)):
+        varname = repair_Vars[idx].VarName
+        if vaule_dict[varname] != None:
+            # 给初始值
+            # repair_model.getVarByName(varname).Start = vaule_dict[varname]
+
+            # 直接固定
+            # var = repair_model.getVarByName(varname)
+            # var.LB = vaule_dict[varname]
+            # var.UB = vaule_dict[varname]
+
+            # 加邻域的固定
+            if abs(vaule_dict[varname]) == 0.0 and k0_cnt < k0:
+                var = repair_model.getVarByName(varname)
+                var_delta = repair_model.addVar(vtype=GRB.BINARY,name=f"k0_{k0_cnt}")
+                repair_model.addConstr(var<=var_delta,name=f"region_k0_{k0_cnt}")
+                k0_cnt+=1
+                delta_var_list.append(var_delta)
+            elif vaule_dict[varname] == 1.0 and k1_cnt < k1:
+                var = repair_model.getVarByName(varname)
+                var_delta = repair_model.addVar(vtype=GRB.BINARY, name=f"k1_{k1_cnt}")
+                repair_model.addConstr((1-var) <= var_delta, name=f"region_k1_{k1_cnt}")
+                k1_cnt += 1
+                delta_var_list.append(var_delta)
+            else:
+                pass
+    print(f"k0:{k0_cnt},\t,k1:{k1_cnt}")
+
+    # 半径约束
+    repair_model.addConstr(
+        gp.quicksum(d for d in delta_var_list) <= Delta,
+        name="radius"
+    )
+
+    repair_model.update()
+
+    # 求解,计算指标
+    # repair_model.setParam("TimeLimit", 2)
+    cb = utils.make_callback(lp_file, utils.all_metrics)
+    repair_model.setParam("Seed", 1234)
+    repair_model.optimize(cb)
