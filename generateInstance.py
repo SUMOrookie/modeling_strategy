@@ -91,7 +91,7 @@ class MVCGenerator:
     def __iter__(self):
         return self
 
-def generate_single_instance(n, queue, istrain, size, generator, seed,post_fix):
+def generate_single_instance(n, queue, istrain, size, generator, seed,post_fix,epoch):
     generator.seed(seed)
     while True:
         i = queue.get()
@@ -101,45 +101,55 @@ def generate_single_instance(n, queue, istrain, size, generator, seed,post_fix):
         instance = next(generator)
         instance_dir = prefix + f"instance/{istrain}/{size}_{post_fix}"
         os.makedirs(instance_dir, exist_ok=True)
-        instance_path = os.path.join(instance_dir, f"{size}_{n + i}.lp")
+        instance_path = os.path.join(instance_dir, f"{size}_{epoch}_{n + i}.lp")
         instance.write_problem(instance_path)
         print(f"第{n + i}个问题实例已生成：{instance_path}")
 
-
 def generate_instances(num_instances, istrain, size, epoch=0):
-    post_fix = "500_600"
-    if size == "CF":
-        generator = ecole.instance.CapacitatedFacilityLocationGenerator(50, 100)
-    elif size == "IS": # 4000
-        # generator = ecole.instance.IndependentSetGenerator(6000)
-        generator = ecole.instance.IndependentSetGenerator(600)
-    elif size == "IS_hard": # 6000
-        generator = ecole.instance.IndependentSetGenerator(9000)
-    elif size == "CA":
-        if epoch == 0:
-            # generator = ecole.instance.CombinatorialAuctionGenerator(300, 1500)
-            generator = ecole.instance.CombinatorialAuctionGenerator(30, 150)
-        elif epoch == 1:
-            # generator = ecole.instance.CombinatorialAuctionGenerator(2000, 4000)
-            # generator = ecole.instance.CombinatorialAuctionGenerator(100, 200)
-            # generator = ecole.instance.CombinatorialAuctionGenerator(500, 700)
-            generator = ecole.instance.CombinatorialAuctionGenerator(500, 600)
-            # generator = ecole.instance.CombinatorialAuctionGenerator(500, 1500)
-    elif size == "CA_hard":
-        if epoch == 0:
-            generator = ecole.instance.CombinatorialAuctionGenerator(600, 3000)
-        elif epoch == 1:
-            generator = ecole.instance.CombinatorialAuctionGenerator(3000, 6000)
-    elif size == "SC":
-        generator = ecole.instance.SetCoverGenerator(3000, 5000)
-    elif size == "MVC":
-        # MVC: med，默认 barabasi_m=5
-        generator = MVCGenerator(num_nodes=4000)
-    elif size == "MVC_hard":
-        # MVC_hard: 6000 节点
-        generator = MVCGenerator(num_nodes=6000)
-    else:
-        raise ValueError("Invalid type")
+    post_fix = "same_with_ps"
+    # if size == "CF":
+    #     generator = ecole.instance.CapacitatedFacilityLocationGenerator(50, 100)
+    # elif size == "IS": # 4000
+    #     # generator = ecole.instance.IndependentSetGenerator(6000)
+    #     generator = ecole.instance.IndependentSetGenerator(600)
+    # elif size == "IS_hard": # 6000
+    #     generator = ecole.instance.IndependentSetGenerator(9000)
+    # elif size == "CA":
+    #     if epoch == 0:
+    #         # generator = ecole.instance.CombinatorialAuctionGenerator(300, 1500)
+    #         generator = ecole.instance.CombinatorialAuctionGenerator(30, 150)
+    #     elif epoch == 1:
+    #         # generator = ecole.instance.CombinatorialAuctionGenerator(2000, 4000)
+    #         # generator = ecole.instance.CombinatorialAuctionGenerator(100, 200)
+    #         # generator = ecole.instance.CombinatorialAuctionGenerator(500, 700)
+    #         # generator = ecole.instance.CombinatorialAuctionGenerator(7000, 1500)
+    #         generator = ecole.instance.CombinatorialAuctionGenerator(8600, 1500,add_item_prob=0.85) # 差不多达到论文的标准
+    #         # generator = ecole.instance.CombinatorialAuctionGenerator(500, 1500)
+    # elif size == "CA_hard":
+    #     if epoch == 0:
+    #         generator = ecole.instance.CombinatorialAuctionGenerator(600, 3000)
+    #     elif epoch == 1:
+    #         generator = ecole.instance.CombinatorialAuctionGenerator(3000, 6000)
+    # elif size == "SC":
+    #     generator = ecole.instance.SetCoverGenerator(3000, 5000)
+    # elif size == "MVC":
+    #     # MVC: med，默认 barabasi_m=5
+    #     generator = MVCGenerator(num_nodes=4000)
+    # elif size == "MVC_hard":
+    #     # MVC_hard: 6000 节点
+    #     generator = MVCGenerator(num_nodes=6000)
+    # else:
+    #     raise ValueError("Invalid type")
+
+    generator_list = [
+        ecole.instance.CombinatorialAuctionGenerator(500, 600),
+        ecole.instance.CombinatorialAuctionGenerator(400, 1000),
+        ecole.instance.CombinatorialAuctionGenerator(300, 1300),
+        ecole.instance.CombinatorialAuctionGenerator(8600, 1500, add_item_prob=0.85)
+    ]
+    if size == "CA":
+        generator = generator_list[epoch]
+
     base_seed = random.randint(0, 2 ** 16 - 1)
     # seed = int(time.time())
     observation_function = ecole.observation.MilpBipartite()
@@ -149,18 +159,25 @@ def generate_instances(num_instances, istrain, size, epoch=0):
     # n = epoch * num_instances
     n = 0
     # Add tasks to queue
+    if epoch == 3:
+        num_instances = 1
     for i in range(num_instances):
         task_queue.put(i)
 
     # Number of worker processes
-    num_workers = 4
+    num_workers = 20
 
     # Create worker processes
     workers = []
     for worker_id in range(num_workers):
         seed = base_seed + worker_id
-        worker = Process(target=generate_single_instance,
-                         args=(n, task_queue, istrain, size, generator, seed,post_fix))
+        if epoch == 3:
+            worker = Process(target=generate_single_instance,
+                             args=(n, task_queue, istrain, size, generator, seed, post_fix, epoch))
+        else:
+            worker = Process(target=generate_single_instance,
+                            args=(n, task_queue, istrain, size, generator, seed,post_fix,epoch))
+
         workers.append(worker)
         worker.start()
 
@@ -174,10 +191,42 @@ def generate_instances(num_instances, istrain, size, epoch=0):
 
 
 if __name__ == '__main__':
-    mix = False
-    if mix:
-        for i in range(3):
-            generate_instances(100, "train", "CA", epoch=i)
-    else:  # 在下面改需要的，epoch不用管全为1
-        generate_instances(100, "train", "CA", epoch=1)
-        # generate_instances(5, "test", "IS", epoch=1)
+    for epoch in range(4):
+        generate_instances(6, "train", "CA", epoch=epoch)
+    # generate_instances(5, "test", "IS", epoch=1)
+
+GENERATOR_CONFIGS = {
+    "CF": [
+        {"class": ecole.instance.CapacitatedFacilityLocationGenerator, "args": (50, 100), "kwargs": {}},
+        # 如果还想要别的 CF 参数，就继续加
+    ],
+    "IS": [
+        {"class": ecole.instance.IndependentSetGenerator, "args": (600,), "kwargs": {}},
+        {"class": ecole.instance.IndependentSetGenerator, "args": (4000,), "kwargs": {}},
+    ],
+    "IS_hard": [
+        {"class": ecole.instance.IndependentSetGenerator, "args": (9000,), "kwargs": {}},
+    ],
+    "CA": [
+        {"class": ecole.instance.CombinatorialAuctionGenerator, "args": (500, 600), "kwargs": {}},       # easy
+        {"class": ecole.instance.CombinatorialAuctionGenerator, "args": (2000, 800), "kwargs": {}},
+        {"class": ecole.instance.CombinatorialAuctionGenerator, "args": (4000, 1000), "kwargs": {}},
+        {"class": ecole.instance.CombinatorialAuctionGenerator,
+         "args": (8600, 1500),
+         "kwargs": {"add_item_prob": 0.85}},                                                           # hard
+    ],
+    "CA_hard": [
+        {"class": ecole.instance.CombinatorialAuctionGenerator, "args": (600, 3000), "kwargs": {}},
+        {"class": ecole.instance.CombinatorialAuctionGenerator, "args": (3000, 6000), "kwargs": {}},
+    ],
+    "SC": [
+        {"class": ecole.instance.SetCoverGenerator, "args": (3000, 5000), "kwargs": {}},
+    ],
+    "MVC": [
+        {"class": MVCGenerator, "args": (), "kwargs": {"num_nodes": 4000}},
+    ],
+    "MVC_hard": [
+        {"class": MVCGenerator, "args": (), "kwargs": {"num_nodes": 6000}},
+    ],
+}
+

@@ -15,7 +15,7 @@ import utils
 
 k0 = 30
 k1 = 30
-Delta = 30
+Delta = 10
 
 
 def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num: int,seed:int,problem:str,repair_method:str,PostSolve:bool,agg_model_solve_time):
@@ -86,7 +86,7 @@ def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num:
         # 读入新模型，用于解的可行性修复
         repair_model = gp.read(lp_path)
         repair_model.setParam("Threads", Threads)
-
+        repair_model.setParam("Seed", 5678)
         if repair_method == "naive":
             # 简单的启发式修复
             vaule_dict = repair_and_post_solve_func.heuristic_repair(repair_model, vaule_dict)
@@ -102,7 +102,7 @@ def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num:
 
 
         # 得到可行解后，后处理
-        repair_and_post_solve_func.PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,seed=5678)
+        repair_and_post_solve_func.PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file)
         t1 = time.perf_counter()
 
         status_agg = repair_model.Status
@@ -146,14 +146,9 @@ def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num:
 
 
 if __name__ == '__main__':
-    # data_dir = "assignment_size_50_minval_200_maxval_300"
 
-    # problem = "assignment"
     problem = "CA"
-    # data_dir = "CA_500_700"
-    # data_dir = "CA_500_600"
     data_dir = "CA_500_600"
-    # data_dir = "CA_200_400"
 
     # lp_files_dir = f"./instance/test/{data_dir}"
     lp_files_dir = f"./instance/test/{data_dir}"
@@ -173,21 +168,21 @@ if __name__ == '__main__':
 
         repair_method = repair_method_list[idx]
 
-        result_dir = f"./result/{data_dir}_solve_{solve_num}_aggNum_{agg_num}_aggsolvetime_{agg_model_solve_time}_repair_{repair_method}_PostSolve_{post_solve}_Threads_{Threads}"
+        result_dir = f"./result/random_{data_dir}_solve_{solve_num}_aggNum_{agg_num}_aggsolvetime_{agg_model_solve_time}_repair_{repair_method}_PostSolve_{post_solve}_Threads_{Threads}"
 
         # 保存统计结果
         all_runs = []
         os.makedirs(result_dir, exist_ok=True)
 
         # 读取cache
-        cache_dir = "./cache"
+        cache_dir = "./cache/test"
         cache = utils.load_optimal_cache(cache_dir, data_dir, lp_files_dir, solve_num, Threads)
         #
         # 每个seed，求解一次
         for seed in seed_list:
             random.seed(seed)
             df = solve_lp_files_gurobi(cache, lp_files_dir, solve_num, agg_num, seed, problem, repair_method, post_solve, agg_model_solve_time)
-            df.to_csv(result_dir + f"/surrogate_stats_aggnum_{agg_num}_seed_{seed}_repair_{repair_method}.csv", index=False)
+            df.to_csv(result_dir + f"/random_aggnum_{agg_num}_seed_{seed}_repair_{repair_method}.csv", index=False)
             all_runs.append(df)
 
         # 合并所有 seed 的明细

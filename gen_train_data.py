@@ -239,7 +239,7 @@ def optimize(
         # # 如果已经有了constr_score，就跳过
         if os.path.exists(dataset_dir + constr_score_folder +f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle'):
             print("continue")
-            continue
+            pass
 
         # 读取问题
         lp_path = os.path.join(lp_dir_path, lp_file)
@@ -370,8 +370,8 @@ def optimize(
             now_constraint_features.append(norm_constr_degree[i])
 
             # pos_emb
-            pos_emb = decimal_to_binary_list(n,i)
-            now_constraint_features.extend(pos_emb)
+            # pos_emb = decimal_to_binary_list(m,i)
+            # now_constraint_features.extend(pos_emb)
             constraint_features.append(now_constraint_features)
         
         for i in range(m):
@@ -384,7 +384,7 @@ def optimize(
         ## 约束标签采集
         sample_round = 40 # 采样此时
         k = 50 # 约束子集大小
-        constr_score, subset_and_timereduce = gen_constr_label(lp_path, cache,sample_round,k)
+        # constr_score, subset_and_timereduce = gen_constr_label(lp_path, cache,sample_round,k)
 
         # 保存
         os.makedirs(dataset_dir + BG_folder,exist_ok=True)
@@ -392,10 +392,10 @@ def optimize(
         os.makedirs(dataset_dir + solve_info_folder, exist_ok=True)
         with open(dataset_dir + BG_folder + f"/{lp_file.rsplit('.',1)[0]}_BG" + '.pickle', 'wb') as f:
                 pickle.dump([variable_features, constraint_features, edge_indices, edge_features], f)
-        with open(dataset_dir + constr_score_folder + f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle', 'wb') as f:
-                pickle.dump([constr_score], f)
-        with open(dataset_dir + solve_info_folder + f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle', 'wb') as f:
-                pickle.dump([subset_and_timereduce], f)
+        # with open(dataset_dir + constr_score_folder + f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle', 'wb') as f:
+        #         pickle.dump([constr_score], f)
+        # with open(dataset_dir + solve_info_folder + f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle', 'wb') as f:
+        #         pickle.dump([subset_and_timereduce], f)
 
 
 def parse_args():

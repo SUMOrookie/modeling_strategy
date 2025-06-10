@@ -1,5 +1,5 @@
 import random
-
+import time
 from gurobipy import GRB
 import gurobipy as gp
 import utils
@@ -273,7 +273,7 @@ def heuristic_repair_light_MILP(repair_model,value_dict,lp_path):
     return value_dict
 
 
-def PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,seed = random.randint(1,9999)):
+def PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,start_time):
     ## 修复后，作为原模型初始解求解，也就是再接入求解器
     print("------------PostSolve-------------")
     # 赋初始值
@@ -322,5 +322,7 @@ def PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,seed = random.randint(
     # 求解,计算指标
     # repair_model.setParam("TimeLimit", 2)
     cb = utils.make_callback(lp_file, utils.all_metrics)
-    repair_model.setParam("Seed", 1234)
+    # repair_model.setParam("Seed", 1234)
+    rest_time = 3600 - (time.perf_counter() - start_time)
+    repair_model.setParam("TimeLimit", rest_time)
     repair_model.optimize(cb)

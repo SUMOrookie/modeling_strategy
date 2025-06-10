@@ -120,13 +120,17 @@ def gen_primes(n):
     return primes
 
 
-def get_solving_cache(cache:dict,cache_file:str,directory: str, num_problems: int,Threads:int):
+def get_solving_cache(cache:dict,cache_file:str,directory: str, num_problems: int,Threads:int,time_limit=3600):
     # 获取目录下所有的 .lp 文件
     lp_files = [f for f in os.listdir(directory) if f.endswith('.lp')]
     lp_files.sort()  # 按文件名排序，确保顺序一致
 
     # 限制读取的文件数量
     lp_files = lp_files[:num_problems]
+
+    # log folder
+    log_folder = directory.replace('./instance/', './log/')
+    os.makedirs(log_folder,exist_ok=True)
 
     # 依次读取并求解每个 .lp 文件
     for lp_file in lp_files:
@@ -145,6 +149,8 @@ def get_solving_cache(cache:dict,cache_file:str,directory: str, num_problems: in
 
             # 时间从读入开始算,求解
             model_orig.setParam("Threads", Threads)
+            model_orig.setParam('LogFile', os.path.join(log_folder,f'{lp_file}.log') )
+            model_orig.setParam("TimeLimit", time_limit)
             t0 = time.perf_counter()
             model_orig.optimize()
             t1 = time.perf_counter()
@@ -154,14 +160,21 @@ def get_solving_cache(cache:dict,cache_file:str,directory: str, num_problems: in
             status_orig = model_orig.Status
             obj_orig = model_orig.ObjVal
             time_orig = t1 - t0
-
+            var_num = model_orig.getAttr("NumVars")
+            constr_num = model_orig.getAttr("NumConstrs")
             # 写入缓存
             cache[lp_path] = {
                 'obj_sense':   obj_sense,
                 'status_orig': status_orig,
                 'obj_orig':    obj_orig,
-                'time_orig':   time_orig
+                'time_orig':   time_orig,
+                'var_num':var_num,
+                'constr_num':constr_num
             }
+
+            # 保存log
+
+
             with open(cache_file, 'w') as f:
                 json.dump(cache, f, indent=2)
 
@@ -231,7 +244,7 @@ def load_gap_cache(cache_dir, task_name, lp_dir_path, solve_num, Threads):
     get_gap_cache(cache,cache_file,lp_dir_path, solve_num,Threads)
     return cache
 
-def load_optimal_cache(cache_dir, data_dir, lp_files_dir, solve_num, Threads=0):
+def load_optimal_cache(cache_dir, data_dir, lp_files_dir, solve_num, Threads=0,time_limit=3600):
 
     os.makedirs(cache_dir,exist_ok=True)
     cache_file = os.path.join(cache_dir,f'{data_dir}_solve_cache.json')
@@ -243,7 +256,7 @@ def load_optimal_cache(cache_dir, data_dir, lp_files_dir, solve_num, Threads=0):
     else:
         cache = {}
 
-    get_solving_cache(cache,cache_file,lp_files_dir, solve_num,Threads)
+    get_solving_cache(cache,cache_file,lp_files_dir, solve_num,Threads,time_limit)
     return cache
 
 
@@ -322,6 +335,7 @@ def aggregate_constr(model_agg,agg_num=None,sample=None):
         sample = random.sample(conss, min(agg_num, len(conss)))
     if agg_num == None:
         agg_num = 50
+        print("using default agg num")
 
     # 乘子
     # primes = utils.gen_primes(agg_num)

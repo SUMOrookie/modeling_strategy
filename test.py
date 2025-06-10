@@ -14,7 +14,8 @@ import pandas as pd
 
 
 # 读问题
-task_name = "CA_500_600"
+# task_name = "CA_500_600"
+task_name = "CA_same_with_ps"
 lp_dir_path = f"./instance/test/{task_name}"
 
 lp_files = [f for f in os.listdir(lp_dir_path) if f.endswith('.lp')]
@@ -23,8 +24,9 @@ lp_files.sort()  # 按文件名排序，确保顺序一致
 # 读取求解cache
 cache_dir = "./cache/test"
 Threads = 0
-solve_num = min(10,len(lp_files))
-cache = utils.load_optimal_cache(cache_dir, task_name, lp_dir_path, solve_num, Threads)
+solve_num = min(20,len(lp_files))
+time_limit = 3600
+cache = utils.load_optimal_cache(cache_dir, task_name, lp_dir_path, solve_num, Threads,time_limit)
 # cache = utils.load_gap_cache(cache_dir, task_name, lp_dir_path, solve_num, Threads)
 
 # parser
@@ -58,10 +60,13 @@ os.makedirs(result_dir,exist_ok=True)
 
 # neighborhood config
 # 领域的参数
-k0 = 30  # k0个为0的变量
-k1 = 30  # k1个为1的变量
-Delta = 20  # 邻域半径上界
+# k0 = 30  # k0个为0的变量
+# k1 = 30  # k1个为1的变量
+# Delta = 10  # 邻域半径上界
 # Delta = 30  # 邻域半径上界
+
+# 20 比 1 的k0和k1试一下
+# 60 比 1 的delta
 
 for lp_file in lp_files[:solve_num]:
 
@@ -84,6 +89,8 @@ for lp_file in lp_files[:solve_num]:
 
     model_agg = gp.read(lp_path)
     t0 = time.perf_counter()
+
+    numVars = model_agg.getAttr("NumVars")
 
     cons_num_orig = model_agg.getAttr("NumConstrs")
 
@@ -175,8 +182,8 @@ for lp_file in lp_files[:solve_num]:
         now_constraint_features.append(norm_constr_degree[i])
 
         # pos_emb
-        pos_emb = utils.decimal_to_binary_list(n, i)
-        now_constraint_features.extend(pos_emb)
+        # pos_emb = utils.decimal_to_binary_list(m, i)
+        # now_constraint_features.extend(pos_emb)
 
         constraint_features.append(now_constraint_features)
 
@@ -213,8 +220,10 @@ for lp_file in lp_files[:solve_num]:
         for i in range(n):
             for j in range(con_size-var_size):
                 variable_features[i].append(0)
-
-    features = variable_features + constraint_features
+    if lp_file == "CA_1_0.lp":
+        features = variable_features + constraint_features
+    else:
+        features = variable_features + constraint_features
     features = torch.as_tensor(features).float()
 
 
@@ -238,7 +247,7 @@ for lp_file in lp_files[:solve_num]:
                   alpha=args.alpha)  # LeakyReLU alpha coefficient
 
 
-    nn_model.load_state_dict(torch.load(f"./model/{task_name}/model_1748015205.913787_6.009954452514648.pkl"))
+    nn_model.load_state_dict(torch.load(f"./model/{task_name}/model.pkl"))
 
     if args.cuda:  # Move to GPU
         nn_model.to(device)
@@ -312,7 +321,10 @@ for lp_file in lp_files[:solve_num]:
     time_repair = time_repair_finish - time_solve_agg_model_finish
 
     # 得到可行解后，后处理
-    repair_and_post_solve_func.PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file)
+    k0  = numVars // 20
+    k1  = numVars // 20
+    Delta = numVars // 60
+    repair_and_post_solve_func.PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,t0)
 
     t1 = time.perf_counter()
     time_warm_start_solve = t1 - time_repair_finish
