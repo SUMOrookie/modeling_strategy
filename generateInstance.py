@@ -141,11 +141,15 @@ def generate_instances(num_instances, istrain, size, epoch=0):
     # else:
     #     raise ValueError("Invalid type")
 
+    # generator_list = [
+    #     ecole.instance.CombinatorialAuctionGenerator(500, 600, add_item_prob=0.7),
+    #     ecole.instance.CombinatorialAuctionGenerator(2000, 1000, add_item_prob=0.8), # 3600解不完，10%gap左右
+    #     ecole.instance.CombinatorialAuctionGenerator(4000, 1300, add_item_prob=0.8),
+    #     ecole.instance.CombinatorialAuctionGenerator(8600, 1500, add_item_prob=0.85)
+    # ]
+    # 500, 600, add_item_prob=0.7普遍是几百到一千秒
     generator_list = [
-        ecole.instance.CombinatorialAuctionGenerator(500, 600),
-        ecole.instance.CombinatorialAuctionGenerator(400, 1000),
-        ecole.instance.CombinatorialAuctionGenerator(300, 1300),
-        ecole.instance.CombinatorialAuctionGenerator(8600, 1500, add_item_prob=0.85)
+        ecole.instance.CombinatorialAuctionGenerator(700, 800, add_item_prob=0.7) # 500, 600, add_item_prob=0.7普遍是几百到一千秒
     ]
     if size == "CA":
         generator = generator_list[epoch]
@@ -191,42 +195,8 @@ def generate_instances(num_instances, istrain, size, epoch=0):
 
 
 if __name__ == '__main__':
-    for epoch in range(4):
-        generate_instances(6, "train", "CA", epoch=epoch)
+    for epoch in range(1):
+        generate_instances(10, "test", "CA", epoch=epoch)
     # generate_instances(5, "test", "IS", epoch=1)
 
-GENERATOR_CONFIGS = {
-    "CF": [
-        {"class": ecole.instance.CapacitatedFacilityLocationGenerator, "args": (50, 100), "kwargs": {}},
-        # 如果还想要别的 CF 参数，就继续加
-    ],
-    "IS": [
-        {"class": ecole.instance.IndependentSetGenerator, "args": (600,), "kwargs": {}},
-        {"class": ecole.instance.IndependentSetGenerator, "args": (4000,), "kwargs": {}},
-    ],
-    "IS_hard": [
-        {"class": ecole.instance.IndependentSetGenerator, "args": (9000,), "kwargs": {}},
-    ],
-    "CA": [
-        {"class": ecole.instance.CombinatorialAuctionGenerator, "args": (500, 600), "kwargs": {}},       # easy
-        {"class": ecole.instance.CombinatorialAuctionGenerator, "args": (2000, 800), "kwargs": {}},
-        {"class": ecole.instance.CombinatorialAuctionGenerator, "args": (4000, 1000), "kwargs": {}},
-        {"class": ecole.instance.CombinatorialAuctionGenerator,
-         "args": (8600, 1500),
-         "kwargs": {"add_item_prob": 0.85}},                                                           # hard
-    ],
-    "CA_hard": [
-        {"class": ecole.instance.CombinatorialAuctionGenerator, "args": (600, 3000), "kwargs": {}},
-        {"class": ecole.instance.CombinatorialAuctionGenerator, "args": (3000, 6000), "kwargs": {}},
-    ],
-    "SC": [
-        {"class": ecole.instance.SetCoverGenerator, "args": (3000, 5000), "kwargs": {}},
-    ],
-    "MVC": [
-        {"class": MVCGenerator, "args": (), "kwargs": {"num_nodes": 4000}},
-    ],
-    "MVC_hard": [
-        {"class": MVCGenerator, "args": (), "kwargs": {"num_nodes": 6000}},
-    ],
-}
 

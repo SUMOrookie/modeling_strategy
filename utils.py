@@ -14,18 +14,29 @@ all_metrics = []
 def make_callback(solve_id, metrics_list):
     """返回一个回调函数，该回调会把当前 solve 的时间和 gap 存到 metrics_list."""
     info = {"solve_id": solve_id,
-            "hit": False,        # 是否已经记录过
+            "hit": False,        # 是否已经记录过达到1%gap
             "time_at_1pct": None,
             "gap_at_hit": None,
-            "time_perf_counter":None}
+            "time_perf_counter":None,
+
+            # 关于1000s时的数据
+            "hit_1000": False,  # 是否已记录过 1000 秒状态
+            "obj_at_1000": None,
+            "gap_at_1000": None,
+            }
 
     metrics_list.append(info)
 
     start = time.perf_counter()
     def cb(model, where):
         if where == GRB.Callback.MIP and not info["hit"]:
+            # now = time.perf_counter()
+            # 上面的计时方式是遗留问题
+
+            elapsed = model.cbGet(GRB.Callback.RUNTIME)
             best = model.cbGet(GRB.Callback.MIP_OBJBST)
             bound = model.cbGet(GRB.Callback.MIP_OBJBND)
+
             if abs(best) > 1e-6:
                 gap = abs(best - bound) / abs(best)
             else:
@@ -37,6 +48,11 @@ def make_callback(solve_id, metrics_list):
                 info["time_at_1pct"] = now - start
                 info["gap_at_hit"]  = gap
 
+            # 记录 1000 秒时的目标值
+            if elapsed >= 1000 and not info["hit_1000"]:
+                info["hit_1000"] = True
+                info["obj_at_1000"] = best
+                info["gap_at_1000"] = gap
     return cb
 
 def get_a_assignmeng_lp():
@@ -151,8 +167,11 @@ def get_solving_cache(cache:dict,cache_file:str,directory: str, num_problems: in
             model_orig.setParam("Threads", Threads)
             model_orig.setParam('LogFile', os.path.join(log_folder,f'{lp_file}.log') )
             model_orig.setParam("TimeLimit", time_limit)
+
+            # 记录是否已经输出过信息
+            cb = make_callback(lp_file, all_metrics)
             t0 = time.perf_counter()
-            model_orig.optimize()
+            model_orig.optimize(cb)
             t1 = time.perf_counter()
 
             # 指标
@@ -164,17 +183,22 @@ def get_solving_cache(cache:dict,cache_file:str,directory: str, num_problems: in
             constr_num = model_orig.getAttr("NumConstrs")
             # 写入缓存
             cache[lp_path] = {
+                'time_limit':time_limit,
                 'obj_sense':   obj_sense,
                 'status_orig': status_orig,
                 'obj_orig':    obj_orig,
                 'time_orig':   time_orig,
                 'var_num':var_num,
-                'constr_num':constr_num
+                'constr_num':constr_num,
+                'hit_1000':all_metrics[-1]["hit_1000"],
+                "obj_at_1000":all_metrics[-1]["obj_at_1000"],
+                "gap_at_1000":all_metrics[-1]["gap_at_1000"],
+                'gap_at_hit_1pct': all_metrics[-1]['gap_at_hit'],
+                'hit_1pct_gap': all_metrics[-1]['hit'],
+                'time_at_1pct': all_metrics[-1]['time_at_1pct']
             }
 
             # 保存log
-
-
             with open(cache_file, 'w') as f:
                 json.dump(cache, f, indent=2)
 

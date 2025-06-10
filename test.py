@@ -220,10 +220,9 @@ for lp_file in lp_files[:solve_num]:
         for i in range(n):
             for j in range(con_size-var_size):
                 variable_features[i].append(0)
-    if lp_file == "CA_1_0.lp":
-        features = variable_features + constraint_features
-    else:
-        features = variable_features + constraint_features
+
+
+    features = variable_features + constraint_features
     features = torch.as_tensor(features).float()
 
 
@@ -373,5 +372,5 @@ for lp_file in lp_files[:solve_num]:
     # 和原始时间对比
 
 df = pd.DataFrame(results)
-df.to_csv(result_dir + f"/result_k0_{k0}_k1_{k1}_delta_{Delta}.csv", index=False)
+df.to_csv(result_dir + f"/result.csv", index=False)
 
