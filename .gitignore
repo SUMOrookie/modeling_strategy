@@ -6,3 +6,4 @@ result
 *.pickle
 dataset
 model
+cache

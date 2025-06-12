@@ -149,7 +149,7 @@ def generate_instances(num_instances, istrain, size, epoch=0):
     # ]
     # 500, 600, add_item_prob=0.7普遍是几百到一千秒
     generator_list = [
-        ecole.instance.CombinatorialAuctionGenerator(700, 800, add_item_prob=0.7) # 500, 600, add_item_prob=0.7普遍是几百到一千秒
+        ecole.instance.CombinatorialAuctionGenerator(900, 800, add_item_prob=0.7) # 500, 600, add_item_prob=0.7普遍是几百到一千秒,900, 800, add_item_prob=0.7
     ]
     if size == "CA":
         generator = generator_list[epoch]

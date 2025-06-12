@@ -82,6 +82,7 @@ for lp_file in lp_files[:solve_num]:
         status_orig = entry['status_orig']
         obj_orig = entry['obj_orig']
         time_orig = entry['time_orig']
+        every_second = entry['every_second']
 
     else:
         raise Exception("there is not cache")
@@ -320,9 +321,14 @@ for lp_file in lp_files[:solve_num]:
     time_repair = time_repair_finish - time_solve_agg_model_finish
 
     # 得到可行解后，后处理
-    k0  = numVars // 20
-    k1  = numVars // 20
-    Delta = numVars // 60
+    k0_k1_base = 5
+    delta_base = 10
+    k0  = numVars // k0_k1_base
+    k1  = numVars // k0_k1_base
+    # Delta = numVars // 60
+    Delta = numVars // delta_base
+
+
     repair_and_post_solve_func.PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,t0)
 
     t1 = time.perf_counter()
@@ -341,36 +347,86 @@ for lp_file in lp_files[:solve_num]:
         primal_gap = (obj_orig - obj_agg) / abs(obj_orig) if obj_orig != 0 else float("inf")
     time_reduce = (time_orig - total_time_agg) / time_orig if time_orig > 0 else 0
 
+    # gain计算
+    # obj_orig_same_time = every_second[round(total_time_agg)+1]['obj']
+    by_time = {item["time"]: item for item in every_second}
+    at_time_info = by_time.get(int(total_time_agg),None)
+    if at_time_info is not None:
+        obj_orig_same_time = at_time_info.get('obj',None)
+
+    ## 计算差值
+    if obj_sense == GRB.MINIMIZE:
+        print("最小化问题")
+        if at_time_info is not None:
+            gap_abs_orig = obj_orig_same_time - obj_orig
+            gap_abs_agg = obj_agg - obj_orig
+
+    else:
+        print("最大化问题")
+        if at_time_info is not None:
+            gap_abs_orig =  obj_orig - obj_orig_same_time
+            gap_abs_agg = obj_orig - obj_agg
+
+
 
     print(f"原obj:{obj_orig},\t 聚合后obj：{obj_agg}")
     print(f"原时间:{time_orig},\t 聚合后时间:{total_time_agg}")
 
     print(f"primal_gap:{primal_gap}")
     print(f"time_reduce:{time_reduce}")
-
+    if at_time_info is not None:
+        gap_at_same_time = at_time_info.get('gap',None)
+        print(f"gap_at_same_time:{gap_at_same_time}")
     # 保存
-    results.append({
-        "filename": lp_file,
-        "status_orig": status_orig,
-        "status_agg": status_agg,
-        "obj_orig": obj_orig,
-        "obj_agg": obj_agg,
-        "primal_gap": primal_gap,
-        "original_cons_num": cons_num_orig,
-        "after_cons_num": cons_num_agg,
-        "cons_reduce_ratio": (cons_num_orig - cons_num_agg) / cons_num_orig,
-        "time_orig": time_orig,
-        "time_network":time_network,
-        "time_solve_agg_model":time_solve_agg_model,
-        "time_repair":time_repair,
-        "time_warm_start_solve":time_warm_start_solve,
-        "time_agg": total_time_agg,
-        "time_reduce": time_reduce,
-        "original_cons": cons_num_orig,
-        "after_agg_cons": cons_num_agg,
-    })
-    # 和原始时间对比
+    if at_time_info is not None:
+        results.append({
+            "filename": lp_file,
+            "status_orig": status_orig,
+            "status_agg": status_agg,
+            "obj_orig": obj_orig,
+            "obj_agg": obj_agg,
+            "primal_gap": primal_gap,
+            "obj_orig_same_time":obj_orig_same_time,
+            'gap_at_same_time(full_gap)':gap_at_same_time,
+            'gap_abs_orig':gap_abs_orig,
+            'gap_abs_agg':gap_abs_agg,
+            "original_cons_num": cons_num_orig,
+            "after_cons_num": cons_num_agg,
+            "cons_reduce_ratio": (cons_num_orig - cons_num_agg) / cons_num_orig,
+            "time_orig": time_orig,
+            "time_network":time_network,
+            "time_solve_agg_model":time_solve_agg_model,
+            "time_repair":time_repair,
+            "time_warm_start_solve":time_warm_start_solve,
+            "time_agg": total_time_agg,
+            "time_reduce": time_reduce,
+            "original_cons": cons_num_orig,
+            "after_agg_cons": cons_num_agg,
+        })
+    else:
+        results.append({
+            "filename": lp_file,
+            "status_orig": status_orig,
+            "status_agg": status_agg,
+            "obj_orig": obj_orig,
+            "obj_agg": obj_agg,
+            "primal_gap": primal_gap,
+            "original_cons_num": cons_num_orig,
+            "after_cons_num": cons_num_agg,
+            "cons_reduce_ratio": (cons_num_orig - cons_num_agg) / cons_num_orig,
+            "time_orig": time_orig,
+            "time_network":time_network,
+            "time_solve_agg_model":time_solve_agg_model,
+            "time_repair":time_repair,
+            "time_warm_start_solve":time_warm_start_solve,
+            "time_agg": total_time_agg,
+            "time_reduce": time_reduce,
+            "original_cons": cons_num_orig,
+            "after_agg_cons": cons_num_agg,
+        })
+
+
 
 df = pd.DataFrame(results)
-df.to_csv(result_dir + f"/result.csv", index=False)
+df.to_csv(result_dir + f"/result_k0k1_base{k0_k1_base}_delta_base{delta_base}.csv", index=False)
 

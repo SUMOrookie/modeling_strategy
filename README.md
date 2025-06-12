@@ -1,3 +1,15 @@
+# cache文件夹
+储存测试时直接gurobi求解的信息
+
+# instance文件夹
+存放训练或测试的问题实例
+
+# model
+网络模型
+
+# result
+存放测试结果
+
 # test_random_cons.py
 用来测试随机聚合，以及各种修复函数的效果
 
