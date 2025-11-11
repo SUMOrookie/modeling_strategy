@@ -163,11 +163,13 @@ def generate_instances(num_instances, dataset_name, problem_type,num_workers,bas
     # else:
     #     raise ValueError("Invalid type")
 
+
     # generator = generators_dict[problem_type]
     generator = get_configured_generator(problem_type,problem_parameters)
     param = problem_parameters[problem_type]
     post_fix = utils.get_post_fix(param)
     # observation_function = ecole.observation.MilpBipartite()
+
 
     # Create a queue to hold tasks
     task_queue = Queue()

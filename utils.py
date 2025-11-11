@@ -23,10 +23,13 @@ def make_callback(solve_id, metrics_list):
             "hit_1000": False,  # 是否已记录过 1000 秒状态
             "obj_at_1000": None,
             "gap_at_1000": None,
+
+            # 每一秒的数据
+            "trajectory": [], #  每一秒记录 {"time": ..., "obj": ..., "gap": ...}
             }
 
     metrics_list.append(info)
-
+    last_recorded_second = {"value": -1}
     start = time.perf_counter()
     def cb(model, where):
         if where == GRB.Callback.MIP and not info["hit"]:
@@ -53,6 +56,16 @@ def make_callback(solve_id, metrics_list):
                 info["hit_1000"] = True
                 info["obj_at_1000"] = best
                 info["gap_at_1000"] = gap
+
+            # ✅ 每整秒记录一次 obj/gap
+            current_second = int(elapsed)
+            if current_second > last_recorded_second["value"]:
+                last_recorded_second["value"] = current_second
+                info["trajectory"].append({
+                    "time": current_second,
+                    "obj": best,
+                    "gap": gap
+                })
     return cb
 
 def get_a_assignmeng_lp():
@@ -195,7 +208,8 @@ def get_solving_cache(cache:dict,cache_file:str,directory: str, num_problems: in
                 "gap_at_1000":all_metrics[-1]["gap_at_1000"],
                 'gap_at_hit_1pct': all_metrics[-1]['gap_at_hit'],
                 'hit_1pct_gap': all_metrics[-1]['hit'],
-                'time_at_1pct': all_metrics[-1]['time_at_1pct']
+                'time_at_1pct': all_metrics[-1]['time_at_1pct'],
+                'every_second':all_metrics[-1]['trajectory']
             }
 
             # 保存log
