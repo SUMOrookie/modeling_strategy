@@ -351,8 +351,29 @@ def generate_and_save_feasible_model(lp_path, out_dir,
 
     raise RuntimeError("无法通过随机添加 ≥ 约束获得可行解；所有尝试均失败。")
 
+def get_problem_parameters(json_file_path):
+    try:
+        with open(json_file_path, 'r') as f:
+            problem_parameters = json.load(f)
+        print(f"成功从 {json_file_path} 加载参数。")
+    except FileNotFoundError:
+        print(f"错误: 找不到参数文件 {json_file_path}。")
+        exit(1)  # 找不到文件
+    except json.JSONDecodeError:
+        print(f"错误: {json_file_path} 文件格式不正确。")
+        exit(1)  # JSON格式错误
+    return problem_parameters
+
+def get_post_fix(param):
+    param_values_str = [str(v) for v in param.values()]
+    post_fix = "_".join(param_values_str)
+    return post_fix
+
+
 def aggregate_constr(model_agg,agg_num=None,sample=None):
     # 对于sample出的约束，要分为大于等于、小于等于和等于
+    # sample是约束
+    # todo
     conss = model_agg.getConstrs()
 
     if sample == None:

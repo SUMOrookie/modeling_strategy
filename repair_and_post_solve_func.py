@@ -37,9 +37,10 @@ def compute_scores(model, varname_objc_map,value_dict, violation_count, c_mean,s
             norm_cj = c_j / max_obj_coeff
 
             # score计算
+            # norm_nj越大代表变量导致更多的约束不可行，最大化问题中norm_cj越大表示目标系数越大，那么对于最大化问题，应该尽可能保留这些变量，因此降低score
             score = alpha * norm_nj - (1-alpha) * norm_cj
             scores[var_name] = score
-    elif sense == GRB.MAXIMIZE:
+    elif sense == GRB.MINIMIZE:
         raise Exception("还没写呢")
     else:
         raise Exception("unknown sense")
@@ -135,6 +136,7 @@ def heuristic_repair(repair_model,vaule_dict):
                 var_vaule_one.append(var_name)
 
         # 当约束表达式的值大于1（右端项是1），仅保留一个变量取1，其余取1的变量变为0
+        # todo，适配不同类型的不等式，以及不同数值的右端项。
         if N > 1:
             fix_num = int(N - 1)
             for i in range(fix_num):
@@ -273,7 +275,7 @@ def heuristic_repair_light_MILP(repair_model,value_dict,lp_path):
     return value_dict
 
 
-def PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,start_time):
+def PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,start_time,time_limit):
     ## 修复后，作为原模型初始解求解，也就是再接入求解器
     print("------------PostSolve-------------")
     # 赋初始值
@@ -308,7 +310,8 @@ def PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,start_time):
                 k1_cnt += 1
                 delta_var_list.append(var_delta)
             else:
-                pass
+                # 进入此处的可能：变量取值不为0-1；k0与k1已经达到上限
+                break
     print(f"k0:{k0_cnt},\t,k1:{k1_cnt}")
 
     # 半径约束
@@ -323,6 +326,6 @@ def PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,start_time):
     # repair_model.setParam("TimeLimit", 2)
     cb = utils.make_callback(lp_file, utils.all_metrics)
     # repair_model.setParam("Seed", 1234)
-    rest_time = 3600 - (time.perf_counter() - start_time)
+    rest_time = time_limit - (time.perf_counter() - start_time)
     repair_model.setParam("TimeLimit", rest_time)
     repair_model.optimize(cb)

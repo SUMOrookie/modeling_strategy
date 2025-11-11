@@ -1,5 +1,4 @@
 import os
-import random
 import time
 from multiprocessing import Process, Queue
 # import networkx as nx
@@ -7,6 +6,7 @@ import random
 from pyscipopt import Model as ScipModel
 import ecole
 import os
+import utils
 
 os.environ["LD_DEBUG"] = "libs"
 
@@ -91,7 +91,7 @@ class MVCGenerator:
     def __iter__(self):
         return self
 
-def generate_single_instance(n, queue, istrain, size, generator, seed,post_fix,epoch):
+def generate_single_instance(n, queue, dataset_name, problem_type, generator, seed, post_fix):
     generator.seed(seed)
     while True:
         i = queue.get()
@@ -99,14 +99,36 @@ def generate_single_instance(n, queue, istrain, size, generator, seed,post_fix,e
             break  # No more tasks
 
         instance = next(generator)
-        instance_dir = prefix + f"instance/{istrain}/{size}_{post_fix}"
+        instance_dir = prefix + f"instance/{dataset_name}/{problem_type}_{post_fix}"
         os.makedirs(instance_dir, exist_ok=True)
-        instance_path = os.path.join(instance_dir, f"{size}_{epoch}_{n + i}.lp")
+        instance_path = os.path.join(instance_dir, f"{problem_type}_{n + i}.lp")
         instance.write_problem(instance_path)
         print(f"第{n + i}个问题实例已生成：{instance_path}")
 
-def generate_instances(num_instances, istrain, size, epoch=0):
-    post_fix = "same_with_ps"
+
+def get_configured_generator(problem_type: str,problem_parameters):
+    """
+    根据问题类型键，从 problem_parameters 字典中获取参数，
+    并实例化对应的 Ecole 生成器。
+    """
+    if problem_type not in problem_parameters:
+        raise ValueError(f"未知的问题类型: {problem_type}")
+
+    # 获取该问题类型对应的参数字典
+    params = problem_parameters[problem_type]
+    # 根据问题类型实例化不同的生成器
+    if problem_type == "CA":
+        # 500, 600, add_item_prob=0.7普遍是几百到一千秒
+        generator = ecole.instance.CombinatorialAuctionGenerator(**params)
+    elif problem_type == "IS":
+        generator = ecole.instance.IndependentSetGenerator(**params)
+    else:
+        raise NotImplementedError(f"生成器类型 '{problem_type}' 尚未实现。")
+
+    return generator
+
+
+def generate_instances(num_instances, dataset_name, problem_type,num_workers,base_seed,problem_parameters):
     # if size == "CF":
     #     generator = ecole.instance.CapacitatedFacilityLocationGenerator(50, 100)
     # elif size == "IS": # 4000
@@ -141,47 +163,24 @@ def generate_instances(num_instances, istrain, size, epoch=0):
     # else:
     #     raise ValueError("Invalid type")
 
-    # generator_list = [
-    #     ecole.instance.CombinatorialAuctionGenerator(500, 600, add_item_prob=0.7),
-    #     ecole.instance.CombinatorialAuctionGenerator(2000, 1000, add_item_prob=0.8), # 3600解不完，10%gap左右
-    #     ecole.instance.CombinatorialAuctionGenerator(4000, 1300, add_item_prob=0.8),
-    #     ecole.instance.CombinatorialAuctionGenerator(8600, 1500, add_item_prob=0.85)
-    # ]
-    # 500, 600, add_item_prob=0.7普遍是几百到一千秒
-    generator_list = [
-        ecole.instance.CombinatorialAuctionGenerator(700, 800, add_item_prob=0.7) # 500, 600, add_item_prob=0.7普遍是几百到一千秒
-    ]
-    if size == "CA":
-        generator = generator_list[epoch]
-
-    base_seed = random.randint(0, 2 ** 16 - 1)
-    # seed = int(time.time())
-    observation_function = ecole.observation.MilpBipartite()
+    # generator = generators_dict[problem_type]
+    generator = get_configured_generator(problem_type,problem_parameters)
+    param = problem_parameters[problem_type]
+    post_fix = utils.get_post_fix(param)
+    # observation_function = ecole.observation.MilpBipartite()
 
     # Create a queue to hold tasks
     task_queue = Queue()
-    # n = epoch * num_instances
     n = 0
-    # Add tasks to queue
-    if epoch == 3:
-        num_instances = 1
     for i in range(num_instances):
         task_queue.put(i)
-
-    # Number of worker processes
-    num_workers = 20
 
     # Create worker processes
     workers = []
     for worker_id in range(num_workers):
-        seed = base_seed + worker_id
-        if epoch == 3:
-            worker = Process(target=generate_single_instance,
-                             args=(n, task_queue, istrain, size, generator, seed, post_fix, epoch))
-        else:
-            worker = Process(target=generate_single_instance,
-                            args=(n, task_queue, istrain, size, generator, seed,post_fix,epoch))
-
+        seed = base_seed + worker_id # 每个worker要有不同的seed
+        worker = Process(target=generate_single_instance,
+                         args=(n, task_queue, dataset_name, problem_type, generator, seed, post_fix))
         workers.append(worker)
         worker.start()
 
@@ -195,8 +194,20 @@ def generate_instances(num_instances, istrain, size, epoch=0):
 
 
 if __name__ == '__main__':
-    for epoch in range(1):
-        generate_instances(10, "test", "CA", epoch=epoch)
-    # generate_instances(5, "test", "IS", epoch=1)
+    num_workers = 20
+
+    # 读取生成实例的参数
+    json_file_path = 'parameters/param_2.json'
+    problem_parameters = utils.get_problem_parameters(json_file_path)
+
+    # ecole.instance.CombinatorialAuctionGenerator(2000, 1000, add_item_prob=0.8), # 3600解不完，10%gap左右
+    # dataset_name = "train"
+    dataset_name = "test"
+    if dataset_name == "train":
+        base_seed = 47
+    else:
+        base_seed = 114514
+    generate_instances(10, dataset_name, "CA",num_workers,base_seed,problem_parameters)
+    generate_instances(10, dataset_name, "IS",num_workers,base_seed,problem_parameters)
 
 

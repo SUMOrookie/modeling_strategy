@@ -18,16 +18,16 @@ k1 = 30
 Delta = 10
 
 
-def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num: int,seed:int,problem:str,repair_method:str,PostSolve:bool,agg_model_solve_time):
+def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num: int,seed:int,problem:str,repair_method:str,PostSolve:bool,agg_model_solve_time,time_limit):
     # 获取目录下所有的 .lp 文件
     lp_files = [f for f in os.listdir(directory) if f.endswith('.lp')]
     lp_files.sort()  # 按文件名排序，确保顺序一致
-
 
     # 限制读取的文件数量
     lp_files = lp_files[:num_problems]
 
     # 生成乘子
+    # todo:在此处设置乘子？
     primes = utils.gen_primes(agg_num)
     # u_list = [math.log(p) for p in primes]
     u_list = [1 for p in primes]
@@ -71,7 +71,7 @@ def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num:
         # model_agg.setParam('SolutionLimit', 1)
         print("------------solving agg model-------------")
         model_agg.setParam("Threads",Threads)
-        model_agg.setParam("Seed", 1234)
+        model_agg.setParam("Seed", seed)
         if agg_model_solve_time == -1:
             model_agg.optimize()
         else:
@@ -86,7 +86,7 @@ def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num:
         # 读入新模型，用于解的可行性修复
         repair_model = gp.read(lp_path)
         repair_model.setParam("Threads", Threads)
-        repair_model.setParam("Seed", 5678)
+        repair_model.setParam("Seed", seed+1)
         if repair_method == "naive":
             # 简单的启发式修复
             vaule_dict = repair_and_post_solve_func.heuristic_repair(repair_model, vaule_dict)
@@ -102,7 +102,7 @@ def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num:
 
 
         # 得到可行解后，后处理
-        repair_and_post_solve_func.PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file)
+        repair_and_post_solve_func.PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,t0,time_limit)
         t1 = time.perf_counter()
 
         status_agg = repair_model.Status
@@ -148,23 +148,27 @@ def solve_lp_files_gurobi(cache:dict,directory: str, num_problems: int, agg_num:
 if __name__ == '__main__':
 
     problem = "CA"
-    data_dir = "CA_500_600"
+    json_file_path = 'parameters/param_2.json'
+    params = utils.get_problem_parameters(json_file_path)
+    post_fix = utils.get_post_fix(params[problem])
+
+    data_dir = "_".join([problem,post_fix])
+    # data_dir = "CA_500_600"
 
     # lp_files_dir = f"./instance/test/{data_dir}"
-    lp_files_dir = f"./instance/test/{data_dir}"
-    seed_list = [2,3,4,5,6,7]
-    # seed_list = [2,3,4,5,6,7,8,9,10,11]
-    # seed_list = [1]
+    dataset_name = "test"
+    lp_files_dir = f"./instance/{dataset_name}/{data_dir}"
+    seed_list = [2,3,4,5,6]
     solve_num = 10
-    agg_num = 50
+    agg_num = 10
     Threads = 0 # default 0
     # Threads = 5
     # agg_model_solve_time = -1 # 不限制时间
     agg_model_solve_time = 2
-
+    time_limit = 1000
     repair_method_list = ["None", "gurobi", "naive", "score", "subproblem","lightmilp"]
     post_solve = True
-    for idx in range(5,6):
+    for idx in range(4,5):
 
         repair_method = repair_method_list[idx]
 
@@ -175,13 +179,14 @@ if __name__ == '__main__':
         os.makedirs(result_dir, exist_ok=True)
 
         # 读取cache
-        cache_dir = "./cache/test"
-        cache = utils.load_optimal_cache(cache_dir, data_dir, lp_files_dir, solve_num, Threads)
-        #
+        # todo：求最优解时是可以并行求解的，但是聚合求解不是。
+        cache_dir = f"./cache/{dataset_name}"
+        cache = utils.load_optimal_cache(cache_dir, data_dir, lp_files_dir, solve_num, Threads,time_limit)
+
         # 每个seed，求解一次
         for seed in seed_list:
             random.seed(seed)
-            df = solve_lp_files_gurobi(cache, lp_files_dir, solve_num, agg_num, seed, problem, repair_method, post_solve, agg_model_solve_time)
+            df = solve_lp_files_gurobi(cache, lp_files_dir, solve_num, agg_num, seed, problem, repair_method, post_solve, agg_model_solve_time,time_limit)
             df.to_csv(result_dir + f"/random_aggnum_{agg_num}_seed_{seed}_repair_{repair_method}.csv", index=False)
             all_runs.append(df)
 
