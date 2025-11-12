@@ -275,11 +275,11 @@ def heuristic_repair_light_MILP(repair_model,value_dict,lp_path):
     return value_dict
 
 
-def PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,start_time,time_limit):
+def PostSolve(repair_model,neighborhood,vaule_dict,lp_file,start_time,time_limit):
     ## 修复后，作为原模型初始解求解，也就是再接入求解器
     print("------------PostSolve-------------")
     # 赋初始值
-
+    k0, k1, Delta = neighborhood["k0"], neighborhood["k1"], neighborhood["Delta"]
     k0_cnt = 0
     k1_cnt = 0
     delta_var_list = []
@@ -324,8 +324,9 @@ def PostSolve(repair_model,k0,k1,Delta,vaule_dict,lp_file,start_time,time_limit)
 
     # 求解,计算指标
     # repair_model.setParam("TimeLimit", 2)
-    cb = utils.make_callback(lp_file, utils.all_metrics)
+    # cb = utils.make_callback(lp_file, utils.all_metrics)
     # repair_model.setParam("Seed", 1234)
     rest_time = time_limit - (time.perf_counter() - start_time)
     repair_model.setParam("TimeLimit", rest_time)
-    repair_model.optimize(cb)
+    # repair_model.optimize(cb)
+    repair_model.optimize()

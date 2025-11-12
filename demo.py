@@ -15,7 +15,7 @@ from gurobipy import GRB
 
 
 # 读问题
-task_name = "CA_same_with_ps"
+task_name = "CA_700_1100_0.65"
 lp_dir_path = f"./instance/test/{task_name}"
 
 lp_files = [f for f in os.listdir(lp_dir_path) if f.endswith('.lp')]
@@ -23,6 +23,7 @@ lp_files.sort()  # 按文件名排序，确保顺序一致
 
 vars = []
 constrs = []
+res = {}
 for lp_file in lp_files:
 
 
@@ -30,10 +31,15 @@ for lp_file in lp_files:
     lp_path = os.path.join(lp_dir_path, lp_file)
 
     model = gp.read(lp_path)
-    vars.append(len(model.getVars()))
-    constrs.append(len(model.getConstrs()))
-print("vars:", sum(vars)/len(vars))
-print("constrs:",sum(constrs)/len(constrs))
+    t0 = time.perf_counter()
+    model.optimize()
+    t1 = time.perf_counter()
+    res[lp_file] = {"time":t1-t0}
+    print(res)
+    # vars.append(len(model.getVars()))
+    # constrs.append(len(model.getConstrs()))
+# print("vars:", sum(vars)/len(vars))
+# print("constrs:",sum(constrs)/len(constrs))
 
 
 
