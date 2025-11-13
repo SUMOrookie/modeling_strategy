@@ -7,6 +7,7 @@ import time
 import os
 import gurobipy as gp
 import utils
+import repair_and_post_solve_func
 
 def z_score_normalize(lst):
     if not lst:
@@ -17,6 +18,7 @@ def z_score_normalize(lst):
     if std_dev == 0:  # 处理所有元素相同的情况
         return [0.0] * len(lst)
     return [(x - mean) / std_dev for x in lst]
+
 def decimal_to_binary_list(n, i):
     """
     将十进制整数 i 转换为二进制列表，确保列表长度与 n-1 的二进制位数相同。
@@ -142,8 +144,12 @@ def constr_sample(lp_path,total_rounds,k):
     return blocks
 
 
+def get_constr():
+    pass
+    # 计算聚合问题的解离最优解的距离
 
-def gen_constr_label(lp_path,cache,sample_round,k):
+
+def gen_constr_label(lp_path,cache,sample_round,k,agg_solve_time_limit,Threads,seed,repair_method):
     # 约束sampler
 
     sample_list = constr_sample(lp_path,sample_round,k)
@@ -163,15 +169,16 @@ def gen_constr_label(lp_path,cache,sample_round,k):
 
     constr_num = None
     # 对于每一个约束子集
-    subset_and_timereduce = [] # 元素是列表，列表第一项存放约束index，第二项存放原时间，第三项存放agg后时间
-
+    constr_set_info = [] # 元素是列表，列表第一项存放约束index，第二项存放原时间，第三项存放agg后时间
+    constr_set_distance = []
     for sample in sample_list:
         # 聚合
 
-        model = gp.read(lp_path)
+        model = gp.read(lp_path) # 理论上来说，只需要读一次
         t0 = time.perf_counter()
         ## todo,暂时设置
-        # model.setParam("TimeLimit", 2)
+        model.setParam("TimeLimit", agg_solve_time_limit)
+        # model.setParam("") 这里是否需要设置seed
         model.Params.OutputFlag = 0
 
         # 不能放在聚合后
@@ -186,34 +193,58 @@ def gen_constr_label(lp_path,cache,sample_round,k):
         model.optimize()
         t1 = time.perf_counter()
 
-        ## 计算分数
+        ## 时间减少
         agg_time = t1-t0
         time_reduce = (time_orig - agg_time)/time_orig
         time_reduce_list.append(time_reduce)
 
+        ## 解修复
+        # 获得变量值
+        Vars = model.getVars()
+        vaule_dict = {var.VarName: var.X for var in Vars}
+
+        # 读入新模型，用于解的可行性修复
+        repair_model = gp.read(lp_path)
+        repair_model.setParam("Threads", Threads)
+        # repair_model.setParam("Seed", seed+1)
+        vaule_dict = repair_and_post_solve_func.repair(repair_model,vaule_dict,repair_method,lp_path)
+
+        # 计算松弛解与最优解之间的距离
+        optimal_solution = entry["solution"]
+        distance = sum(abs(vaule_dict[key]-optimal_solution[key]) for key in vaule_dict.keys())
+        constr_set_distance.append(distance)
+
         # 存放原始结果
-        subset_and_timereduce.append([sample,time_orig,agg_time])
+        # constr_set_info.append([sample,time_orig,agg_time,distance])
+        constr_set_info.append({"constr_set":sample,"time_orig":time_orig,"agg_time":agg_time,"distance":distance})
 
     # 计算约束的分数
-    score = {idx:{"total_score":0,"cnt":0} for idx in range(constr_num)}
-    for idx,sample in enumerate(sample_list):
-        for constr_idx in sample:
-            score[constr_idx]["total_score"] += time_reduce_list[idx]
-            score[constr_idx]["cnt"] += 1
+    # score = {idx:{"total_distance":0,"cnt":0} for idx in range(constr_num)}
+    # for idx,sample in enumerate(sample_list):
+    #     for constr_idx in sample:
+    #             score[constr_idx]["total_distance"] += constr_set_distance[idx]
+    #             score[constr_idx]["cnt"] += 1
+    #
+    # score = [[key,val["total_distance"]/val["cnt"]] for key,val in score.items()]
+    # score.sort(key=lambda x:x[1])
 
-    score = [[key,val["total_score"]/val["cnt"]] for key,val in score.items()]
-    score.sort(key=lambda x:x[1],reverse=True)
+    # 计算约束的分数
+    # score = {idx:{"total_score":0,"cnt":0} for idx in range(constr_num)}
+    # for idx,sample in enumerate(sample_list):
+    #     for constr_idx in sample:
+    #         score[constr_idx]["total_score"] += time_reduce_list[idx]
+    #         score[constr_idx]["cnt"] += 1
 
-    return  score,subset_and_timereduce
+    # score = [[key,val["total_score"]/val["cnt"]] for key,val in score.items()]
+    # score.sort(key=lambda x:x[1],reverse=True)
+
+    return  constr_set_info
 
 
 
 
-def optimize(
-    time: int,
-    number: int,
-):
-
+def optimize(agg_solve_time_limit:int,Threads:int,seed,repair_method:str,sample_round:int,set_size:int):
+    random.seed(seed)
     task_name = "CA_500_600"
     lp_dir_path = f"./instance/train/{task_name}"
     os.makedirs(f"./parsed/train/{task_name}", exist_ok=True)
@@ -222,7 +253,9 @@ def optimize(
 
     # cache
     cache_dir = "./cache/train"
-    cache = utils.load_optimal_cache(cache_dir, task_name, lp_dir_path, solve_num=len(lp_files), Threads=0)
+    cache_files = os.path.join(cache_dir,task_name+".json")
+    os.makedirs(cache_dir, exist_ok=True)
+    cache = utils.load_optimal_cache(cache_files, lp_dir_path, solve_num=len(lp_files), Threads=Threads)
 
     # dataset存放目录
     dataset_dir = f"./dataset/{task_name}"
@@ -282,7 +315,9 @@ def optimize(
         m = len(constrs)
         sense_map = {'<': 1, '>': 2, '=': 3}
         k, site, value, constraint, constraint_type = [], [], [], [], []
-
+        # k和constr_degree都表示约束中变量数，也就是约束的度
+        # site:约束中的变量下标，如[1,2,13,146]
+        # value：约束中的变量系数，如[1,1,1,1]
         constr_degree = []
         variable_degree = [0 for i in range(n)]
         for c in constrs:
@@ -291,7 +326,7 @@ def optimize(
             coeffs = [row.getCoeff(idx) for idx in range(row.size())]
 
             k.append(len(vars_in_row))
-            site.append([v.index for v in vars_in_row]) # 变量下标
+            site.append([v.index for v in vars_in_row]) # 变量全局下标，例如x1、x2、x13、x416下标为[1,2,13,146]
             value.append([float(co) for co in coeffs])
             constraint.append(c.RHS)
             constraint_type.append(sense_map[c.Sense])
@@ -312,12 +347,12 @@ def optimize(
         # Bipartite graph encoding
         variable_features = []
         constraint_features = []
-        edge_indices = [[], []] 
-        edge_features = []
-        # variable_features:目标系数，变量标识[0,1]（区别于约束），变量类型(0,1代表连续或整数)，随机特征，加一个变量的表示吧
-        # 再加：在所有变量中的平均系数、度、最大系数、最小系数、每个变量出现顺序的二进制编码
+        edge_indices = [[], []]  # [约束index,变量index]，其实就是稀疏的邻接矩阵
+        edge_features = [] # 约束中变量系数，与edge_indices一一对应。例如edge_indices=[[1,10],...,]表示约束1中存在变量10，系数为edge_features=[1,...,]
+        # variable_features:[目标系数，变量标识[0,1]（区别于约束），变量类型，随机特征，度]
+        # todo 再加：在所有变量中的平均系数、度、最大系数、最小系数、每个变量出现顺序的二进制编码,变量上下界？
 
-        # constraint_features：约束的平均变量系数、约束的度、右端项、sense
+        # constraint_features：[右端项，约束类型（sense），随机特征，度]
 
 
         #print(value_type)
@@ -382,13 +417,15 @@ def optimize(
 
 
         ## 约束标签采集
-        sample_round = 40 # 采样此时
-        k = 50 # 约束子集大小
+        # sample_round = 40 # 采样
+        # k = 50 # 约束子集大小
         # constr_score, subset_and_timereduce = gen_constr_label(lp_path, cache,sample_round,k)
+        # constr_score, constr_subset_and_timereduce = gen_constr_label(lp_path, cache,sample_round,k,agg_solve_time_limit,Threads,seed,repair_method)
+        constr_subset_info = gen_constr_label(lp_path, cache,sample_round,set_size,agg_solve_time_limit,Threads,seed,repair_method)
 
         # 保存
         os.makedirs(dataset_dir + BG_folder,exist_ok=True)
-        os.makedirs(dataset_dir + constr_score_folder, exist_ok=True)
+        # os.makedirs(dataset_dir + constr_score_folder, exist_ok=True)
         os.makedirs(dataset_dir + solve_info_folder, exist_ok=True)
         with open(dataset_dir + BG_folder + f"/{lp_file.rsplit('.',1)[0]}_BG" + '.pickle', 'wb') as f:
                 pickle.dump([variable_features, constraint_features, edge_indices, edge_features], f)
@@ -396,12 +433,21 @@ def optimize(
         #         pickle.dump([constr_score], f)
         # with open(dataset_dir + solve_info_folder + f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle', 'wb') as f:
         #         pickle.dump([subset_and_timereduce], f)
+        with open(dataset_dir + solve_info_folder + f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle', 'wb') as f:
+                pickle.dump(constr_subset_info, f)
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--time', type = int, default = 10, help = 'Running wall-clock time.')
-    parser.add_argument("--number", type = int, default = 10, help = 'The number of instances.')
+    # parser.add_argument('--time', type = int, default = 10, help = 'Running wall-clock time.')
+    # parser.add_argument("--number", type = int, default = 10, help = 'The number of instances.')
+    parser.add_argument("--agg_solve_time_limit", type = int, default = 2, help = '聚合问题求解时间上限')
+    parser.add_argument("--Threads", type = int, default = 0, help = 'gurobi线程数')
+    parser.add_argument("--seed", type = int, default = '517', help = '种子')
+    parser.add_argument("--repair_method", type = str, default = 'subproblem', help = '可行性修复方法')
+    parser.add_argument("--sample_round", type = int, default = 50, help = '约束子集采样次数')
+    parser.add_argument("--set_size", type = int, default = 50, help = '约束子集大小')
+
     return parser.parse_args()
 
 

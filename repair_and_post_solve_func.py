@@ -330,3 +330,19 @@ def PostSolve(repair_model,neighborhood,vaule_dict,lp_file,start_time,time_limit
     repair_model.setParam("TimeLimit", rest_time)
     # repair_model.optimize(cb)
     repair_model.optimize()
+
+
+def repair(repair_model,vaule_dict,repair_method,lp_path):
+    if repair_method == "naive":
+        # 简单的启发式修复
+        vaule_dict = heuristic_repair(repair_model, vaule_dict)
+    elif repair_method == "score":
+        # 变量评分
+        vaule_dict = heuristic_repair_with_score(repair_model, vaule_dict)
+    elif repair_method == "subproblem":
+        vaule_dict = heuristic_repair_subproblem(repair_model, vaule_dict)
+    elif repair_method == "lightmilp":
+        vaule_dict = heuristic_repair_light_MILP(repair_model, vaule_dict, lp_path)
+    else:
+        raise Exception("unknown repair_method")
+    return vaule_dict

@@ -106,8 +106,8 @@ print("CUDA Device Count:", torch.cuda.device_count())
 for i in range(torch.cuda.device_count()):
     print(f"Device {i}: {torch.cuda.get_device_name(i)}")
 
-# device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-device = torch.device("cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cpu")
 # device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 #device = torch.device("cpu")
 
@@ -131,11 +131,14 @@ dataset_dir = f"./dataset/{task_name}"
 BG_dir = os.path.join(dataset_dir,"BG")
 constr_score_dir = os.path.join(dataset_dir,"constr_score")
 
+
 # dataset_files = [f for f in os.listdir(dataset_dir) if f.endswith('.pickle')]
 BG_files = [f for f in os.listdir(BG_dir) if f.endswith('.pickle')]
-constr_score_files = [f for f in os.listdir(constr_score_dir) if f.endswith('.pickle')]
+# constr_score_files = [f for f in os.listdir(constr_score_dir) if f.endswith('.pickle')]
+
 BG_files.sort()
-constr_score_files.sort()
+# constr_score_files.sort()
+
 # data_num = 27
 data_num = len(BG_files)
 
@@ -147,23 +150,23 @@ k = 50
 solve_info_dir = os.path.join(dataset_dir,"solve_info")
 solve_info_files = [f for f in os.listdir(solve_info_dir) if f.endswith('.pickle')]
 solve_info_files.sort()
-for pickle_file_name,constr_score_file_name,solve_info_file_name in zip(BG_files,constr_score_files,solve_info_files):
+for pickle_file_name,solve_info_file_name in zip(BG_files,solve_info_files):
     pickle_path = os.path.join(BG_dir,pickle_file_name)
-    constr_score_path = os.path.join(constr_score_dir,constr_score_file_name)
+    # constr_score_path = os.path.join(constr_score_dir,constr_score_file_name)
     solve_info_path = os.path.join(solve_info_dir, solve_info_file_name)
     with open(solve_info_path, "rb") as f:
         solve_info = pickle.load(f)
     with open(pickle_path,"rb") as f:
         problem = pickle.load(f)
-    with open(constr_score_path,"rb") as f:
-        constr_score = pickle.load(f)
+    # with open(constr_score_path,"rb") as f:
+    #     constr_score = pickle.load(f)
 
 
     variable_features = problem[0]
     constraint_features = problem[1]
     edge_indices = problem[2]
     edge_feature = problem[3]
-    constr_score = constr_score[0]
+    # constr_score = constr_score[0]
     #print(optimal_solution)
     #edge, features, labels, idx_train = load_data()
 
@@ -231,14 +234,10 @@ for pickle_file_name,constr_score_file_name,solve_info_file_name in zip(BG_files
     # 找到最好的子集
     best_subset_idx = -1
     best_agg_time = 1e10
-    solve_info = solve_info[0]
-    for idx,subset_solve_info in enumerate(solve_info):
-        if best_agg_time > subset_solve_info[2]:
-            best_subset_idx = idx
-            best_agg_time = subset_solve_info[2]
-    best_subset = solve_info[best_subset_idx][0]
-    for constr_idx in best_subset:
-        constr_label[constr_idx] = 1
+    solve_info.sort(key=lambda x:x["distance"])
+    best_constr_set = solve_info[0]["constr_set"]
+    for idx in best_constr_set:
+        constr_label[idx] = 1
 
 
     # focal loss的权重
@@ -282,6 +281,8 @@ optimizer = optim.Adam(model.parameters(),
 
 if args.cuda: # Move to GPU
     model.to(device)
+    # 打印模型中第一个参数的设备
+    print(f"模型参数所在的设备: {next(model.parameters()).device}")
     for now_data in range(data_num):
         data_features[now_data] = data_features[now_data].to(device)
         data_labels[now_data] = data_labels[now_data].to(device)

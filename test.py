@@ -14,8 +14,8 @@ import pandas as pd
 
 
 # 读问题
-# task_name = "CA_500_600"
-task_name = "CA_same_with_ps"
+task_name = "CA_500_600"
+# task_name = "CA_same_with_ps"
 lp_dir_path = f"./instance/test/{task_name}"
 
 lp_files = [f for f in os.listdir(lp_dir_path) if f.endswith('.lp')]
@@ -25,8 +25,9 @@ lp_files.sort()  # 按文件名排序，确保顺序一致
 cache_dir = "./cache/test"
 Threads = 0
 solve_num = min(20,len(lp_files))
-time_limit = 3600
-cache = utils.load_optimal_cache(cache_dir, task_name, lp_dir_path, solve_num, Threads,time_limit)
+time_limit = 1000
+cache_files = os.path.join(cache_dir,task_name+f"_threads_{Threads}.json")
+cache = utils.load_optimal_cache(cache_files, lp_dir_path, solve_num, Threads,time_limit)
 # cache = utils.load_gap_cache(cache_dir, task_name, lp_dir_path, solve_num, Threads)
 
 # parser
@@ -54,7 +55,7 @@ device = 'cpu'
 
 results = []
 agg_num = 50
-repair_method = "lightmilp"
+repair_method = "subproblem"
 result_dir = f"./result/{task_name}_test"
 os.makedirs(result_dir,exist_ok=True)
 

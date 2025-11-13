@@ -88,18 +88,22 @@ def accelerated_solving(cache:dict, directory: str, num_problems: int, agg_num: 
         repair_model = gp.read(lp_path)
         repair_model.setParam("Threads", Threads)
         repair_model.setParam("Seed", seed+1)
-        if repair_method == "naive":
-            # 简单的启发式修复
-            vaule_dict = repair_and_post_solve_func.heuristic_repair(repair_model, vaule_dict)
-        elif repair_method == "score":
-            # 变量评分
-            vaule_dict = repair_and_post_solve_func.heuristic_repair_with_score(repair_model, vaule_dict)
-        elif repair_method == "subproblem":
-            vaule_dict = repair_and_post_solve_func.heuristic_repair_subproblem(repair_model, vaule_dict)
-        elif repair_method == "lightmilp":
-            vaule_dict = repair_and_post_solve_func.heuristic_repair_light_MILP(repair_model, vaule_dict, lp_path)
-        else:
-            raise Exception("unknown repair_method")
+
+        vaule_dict = repair_and_post_solve_func.repair(repair_model,vaule_dict,repair_method,lp_path)
+
+        ## 下面的代码整合到repair函数中了
+        # if repair_method == "naive":
+        #     # 简单的启发式修复
+        #     vaule_dict = repair_and_post_solve_func.heuristic_repair(repair_model, vaule_dict)
+        # elif repair_method == "score":
+        #     # 变量评分
+        #     vaule_dict = repair_and_post_solve_func.heuristic_repair_with_score(repair_model, vaule_dict)
+        # elif repair_method == "subproblem":
+        #     vaule_dict = repair_and_post_solve_func.heuristic_repair_subproblem(repair_model, vaule_dict)
+        # elif repair_method == "lightmilp":
+        #     vaule_dict = repair_and_post_solve_func.heuristic_repair_light_MILP(repair_model, vaule_dict, lp_path)
+        # else:
+        #     raise Exception("unknown repair_method")
 
 
         # 得到可行解后，后处理
@@ -412,7 +416,7 @@ if __name__ == '__main__':
         cache_file = os.path.join(cache_dir, f'{data_dir}_solving_cache_threads_{Threads}.json')
 
         ## 单进程求解
-        cache = utils.load_optimal_cache(cache_file, data_dir, lp_files_dir, solve_num, Threads,time_limit)
+        cache = utils.load_optimal_cache(cache_file, lp_files_dir, solve_num, Threads,time_limit)
         # 每个seed，求解一次
         for seed in seed_list:
             random.seed(seed)

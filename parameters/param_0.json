@@ -1,7 +1,7 @@
 {
   "CA": {
-    "n_bids": 200,
-    "n_items": 500,
+    "n_bids": 500,
+    "n_items": 600,
     "add_item_prob": 0.5
   },
   "IS": {

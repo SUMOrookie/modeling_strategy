@@ -253,6 +253,10 @@ def get_solving_cache(cache:dict,cache_file:str,directory: str, num_problems: in
             model_orig.optimize(cb)
             t1 = time.perf_counter()
 
+            # 最优解
+            Vars = model_orig.getVars()
+            solution = {var.VarName: var.X for var in Vars}
+
             # 指标
             obj_sense = model_orig.ModelSense
             status_orig = model_orig.Status
@@ -269,6 +273,7 @@ def get_solving_cache(cache:dict,cache_file:str,directory: str, num_problems: in
                 'time_orig':   time_orig,
                 'var_num':var_num,
                 'constr_num':constr_num,
+                'solution':solution,
                 'hit_1000':all_metrics[-1]["hit_1000"],
                 "obj_at_1000":all_metrics[-1]["obj_at_1000"],
                 "gap_at_1000":all_metrics[-1]["gap_at_1000"],
@@ -349,7 +354,7 @@ def load_gap_cache(cache_dir, task_name, lp_dir_path, solve_num, Threads):
     get_gap_cache(cache,cache_file,lp_dir_path, solve_num,Threads)
     return cache
 
-def load_optimal_cache(cache_file, data_dir, lp_files_dir, solve_num, Threads=0,time_limit=3600):
+def load_optimal_cache(cache_file, lp_files_dir, solve_num, Threads=0,time_limit=3600):
     # 加载缓存（如果存在）
     if os.path.exists(cache_file):
         with open(cache_file, 'r') as f:

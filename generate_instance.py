@@ -199,7 +199,7 @@ if __name__ == '__main__':
     num_workers = 20
 
     # 读取生成实例的参数
-    json_file_path = 'parameters/param_3.json'
+    json_file_path = 'parameters/param_0.json'
     problem_parameters = utils.get_problem_parameters(json_file_path)
 
     # ecole.instance.CombinatorialAuctionGenerator(2000, 1000, add_item_prob=0.8), # 3600解不完，10%gap左右
@@ -210,6 +210,6 @@ if __name__ == '__main__':
     else:
         base_seed = 114514
     generate_instances(10, dataset_name, "CA",num_workers,base_seed,problem_parameters)
-    generate_instances(10, dataset_name, "IS",num_workers,base_seed,problem_parameters)
+    # generate_instances(10, dataset_name, "IS",num_workers,base_seed,problem_parameters)
 
 
