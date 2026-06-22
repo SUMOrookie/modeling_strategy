@@ -1,0 +1,17 @@
+{
+  "CA": {
+    "n_bids": 500,
+    "n_items": 600,
+    "add_item_prob": 0.5
+  },
+  "IS": {
+    "n_nodes": 1500,
+    "affinity": 6
+  },
+  "SC": {
+    "n_rows": 300,
+    "n_cols": 1200,
+    "density": 0.15,
+    "max_coef": 30
+  }
+}

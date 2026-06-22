@@ -1,0 +1,16 @@
+.idea/
+*.lp
+*.csv
+instance
+result
+*.pickle
+dataset
+model
+cache
+log
+predictandsearch/dataset
+predictandsearch/instance
+predictandsearch/result
+parsed
+parameters
+relax_results

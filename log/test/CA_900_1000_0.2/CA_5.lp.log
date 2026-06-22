@@ -1,0 +1,41 @@
+
+Gurobi 11.0.3 (linux64) logging started Tue Feb 24 19:36:45 2026
+
+Set parameter LogFile to value "./log/test/CA_900_1000_0.2/CA_5.lp.log"
+Set parameter TimeLimit to value 3600
+Gurobi Optimizer version 11.0.3 build v11.0.3rc0 (linux64 - "Ubuntu 22.04.5 LTS")
+
+CPU model: AMD Ryzen 9 9900X 12-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 12 physical cores, 24 logical processors, using up to 24 threads
+
+Optimize a model with 774 rows, 900 columns and 1700 nonzeros
+Model fingerprint: 0xfe972119
+Variable types: 0 continuous, 900 integer (900 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [7e-01, 4e+02]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 1e+00]
+Found heuristic solution: objective 37317.903567
+Presolve removed 751 rows and 877 columns
+Presolve time: 0.00s
+Presolved: 23 rows, 23 columns, 56 nonzeros
+Found heuristic solution: objective 44594.858868
+Variable types: 0 continuous, 23 integer (23 binary)
+
+Root relaxation: interrupted, 13 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0          -    0      44594.8589 44598.5369  0.01%     -    0s
+
+Explored 1 nodes (13 simplex iterations) in 0.00 seconds (0.00 work units)
+Thread count was 24 (of 24 available processors)
+
+Solution count 2: 44594.9 37317.9 
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 4.459485886777e+04, best bound 4.459853688571e+04, gap 0.0082%
+
+User-callback calls 1169, time in user-callback 0.00 sec

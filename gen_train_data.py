@@ -1,0 +1,524 @@
+from gurobipy import *
+import numpy as np
+import argparse
+import pickle
+import random
+import time
+import os
+import gurobipy as gp
+import utils
+import repair_and_post_solve_func
+from typing import List
+import logging
+import json
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+import multiprocessing
+def z_score_normalize(lst):
+    if not lst:
+        return []
+    mean = sum(lst) / len(lst)
+    variance = sum((x - mean) ** 2 for x in lst) / len(lst)
+    std_dev = variance ** 0.5
+    if std_dev == 0:  # 处理所有元素相同的情况
+        return [0.0] * len(lst)
+    return [(x - mean) / std_dev for x in lst]
+
+
+def _gen_constr_label_worker(args):
+    lp_path, sample, entry, agg_solve_time_limit, Threads, seed, repair_method, k = args
+    try:
+        model = gp.read(lp_path)
+        t0 = time.perf_counter()
+        model.setParam("TimeLimit", agg_solve_time_limit)
+        model.Params.OutputFlag = 0
+
+        conss = model.getConstrs()
+        sample_conss = [constr for idx, constr in enumerate(conss) if idx in sample]
+        utils.aggregate_constr_two_two(model, k, sample_conss)
+        model.optimize()
+        t1 = time.perf_counter()
+        agg_time = t1 - t0
+        # 时间减少（基于 entry 中的原始时间）
+        time_reduce = (entry["time_orig"] - agg_time) / entry["time_orig"] if entry.get("time_orig") else None
+
+        Vars = model.getVars()
+        vaule_dict = {var.VarName: var.X for var in Vars}
+
+        repair_model = gp.read(lp_path)
+        repair_model.setParam("Threads", Threads)
+        vaule_dict = repair_and_post_solve_func.repair(repair_model, vaule_dict, repair_method, lp_path)
+
+        optimal_solution = entry.get("solution", {})
+        distance = None
+        if optimal_solution:
+            distance = sum(abs(vaule_dict.get(key, 0.0) - optimal_solution.get(key, 0.0)) for key in vaule_dict.keys())
+
+        return {"constr_set": sample, "time_orig": entry.get("time_orig"), "agg_time": agg_time, "distance": distance, "time_reduce": time_reduce}
+    except Exception as e:
+        return {"constr_set": sample, "time_orig": entry.get("time_orig"), "agg_time": None, "distance": None, "error": str(e)}
+
+
+
+def decimal_to_binary_list(n, i):
+    """
+    将十进制整数 i 转换为二进制列表，确保列表长度与 n-1 的二进制位数相同。
+
+    参数:
+    n (int): 用于确定二进制位数的上限值（生成的二进制位数与 n-1 的位数相同）
+    i (int): 需要转换的十进制整数
+
+    返回:
+    list: 包含二进制字符的列表，长度与 n-1 的二进制位数相同
+    """
+    if n <= 0:
+        raise ValueError("n 必须是正整数")
+
+    # 计算所需的位数（即 n-1 的二进制位数）
+    max_bits = len(bin(n - 1)) - 2  # 减2是因为bin()返回的字符串前缀是 '0b'
+
+    # 将 i 转换为指定位数的二进制字符串，并拆分为列表
+    return [int(c) for c in format(i, f'0{max_bits}b')]
+
+
+def Gurobi_solver(n, m, k, site, value, constraint, constraint_type, coefficient, time_limit, obj_type, lower_bound, upper_bound, value_type):
+    '''
+    Function description:
+    Solves a problem instance using the Gurobi solver based on the provided inputs.
+
+    Parameter descriptions:
+    - n: Number of decision variables in the problem instance.
+    - m: Number of constraints in the problem instance.
+    - k: k[i] indicates the number of decision variables involved in the ith constraint.
+    - site: site[i][j] indicates which decision variable is involved in the jth position of the ith constraint.
+    - value: value[i][j] indicates the coefficient of the jth decision variable in the ith constraint.
+    - constraint: constraint[i] indicates the right-hand side value of the ith constraint.
+    - constraint_type: constraint_type[i] indicates the type of the ith constraint, where 1 represents <= and 2 represents >=.
+    - coefficient: coefficient[i] represents the coefficient of the ith decision variable in the objective function.
+    - time_limit: Maximum time allowed for solving.
+    - obj_type: Indicates whether the problem is a maximization or minimization problem.
+    - lower_bound: lower_bound[i] represents the lower bound of the range for the ith decision variable.
+    - upper_bound: upper_bound[i] represents the upper bound of the range for the ith decision variable.
+    - value_type: value_type[i] represents the type of the ith decision variable, 'B' indicates a binary variable, 'I' indicates an integer variable, 'C' indicates a continuous variable.
+    '''
+
+    # Get the start time
+    begin_time = time.time()
+    # Define the optimization model
+    model = Model("Gurobi")
+    # Define n decision variables x[]
+    x = []
+    for i in range(n):
+        if(value_type[i] == 'B'):
+            x.append(model.addVar(lb = lower_bound[i], ub = upper_bound[i], vtype = GRB.BINARY))
+        elif(value_type[i] == 'C'):
+            x.append(model.addVar(lb = lower_bound[i], ub = upper_bound[i], vtype = GRB.CONTINUOUS))
+        else:
+            x.append(model.addVar(lb = lower_bound[i], ub = upper_bound[i], vtype = GRB.INTEGER))
+    # Set the objective function and optimization goal (maximize/minimize)
+    coeff = 0
+    for i in range(n):
+        coeff += x[i] * coefficient[i]
+    if(obj_type == 'maximize'):
+        model.setObjective(coeff, GRB.MAXIMIZE)
+    else:
+        model.setObjective(coeff, GRB.MINIMIZE)
+    # Add m constraints
+    for i in range(m):
+        constr = 0
+        for j in range(k[i]):
+            #print(i, j, k[i])
+            constr += x[site[i][j]] * value[i][j]
+        if(constraint_type[i] == 1):
+            model.addConstr(constr <= constraint[i])
+        elif(constraint_type[i] == 2):
+            model.addConstr(constr >= constraint[i])
+        else:
+            model.addConstr(constr == constraint[i])
+    # Set the maximum solving time
+    model.setParam('TimeLimit', max(time_limit - (time.time() - begin_time), 0))
+    # Optimize the solution
+    model.optimize()
+    ans = []
+    for i in range(n):
+        if(value_type[i] == 'C'):
+            ans.append(x[i].X)
+        else:
+            ans.append(int(x[i].X))
+    return ans
+
+
+def constr_sample(lp_path,total_rounds,k):
+    model = gp.read(lp_path)
+    sample_list = []
+    constr_num = model.getAttr("NumConstrs")
+
+    items = list(range(constr_num))
+    random.shuffle(items)
+
+    # 计算完整子集数量与剩余元素
+    num_full = constr_num // k
+    rem = constr_num % k
+    blocks = []
+    # 切分完整子集
+    for i in range(num_full):
+        start = i * k
+        end = start + k
+        blocks.append(set(items[start:end]))  # List slicing citeturn0search1
+
+    # 处理剩余元素，若有剩余则补缺为完整子集
+    if rem > 0:
+        last_block = set(items[num_full * k:])  # 剩余元素
+        # 从全集中随机补充 (k - rem) 个元素
+        to_add = set(random.sample(range(constr_num), k - rem))  # random.sample 无放回抽样 citeturn0search3
+        last_block.update(to_add)
+        blocks.append(last_block)
+
+    # 若初步子集超过 total_rounds，截取前 total_rounds 个
+    if len(blocks) >= total_rounds:
+        return blocks[:total_rounds]
+
+    # 随机补缺至 total_rounds
+    for _ in range(total_rounds - len(blocks)):
+        blocks.append(set(random.sample(range(constr_num), k)))  # 随机抽样补缺 citeturn0search3
+
+    return blocks
+
+
+def get_constr():
+    pass
+    # 计算聚合问题的解离最优解的距离
+
+
+def gen_constr_label(lp_path,cache,sample_round,k,agg_solve_time_limit,Threads,seed,repair_method,num_procs=8):
+    if num_procs is None:
+        # num_procs = min(len(sample_list), max(1, multiprocessing.cpu_count() - 1))
+        num_procs = min(len(sample_list), 8)
+    # 约束sampler
+
+    sample_list = constr_sample(lp_path,sample_round,k)
+
+    time_reduce_list = []
+
+    # read cache
+    if lp_path in cache:
+        print("------------read cache-------------")
+        entry = cache[lp_path]
+        obj_sense = entry['obj_sense']
+        status_orig = entry['status_orig']
+        obj_orig = entry['obj_orig']
+        time_orig = entry['time_orig']
+    else:
+        raise Exception("no cache")
+
+    constr_num = None
+    # 对于每一个约束子集
+    constr_set_info = [] # 元素是列表，列表第一项存放约束index，第二项存放原时间，第三项存放agg后时间
+    constr_set_distance = []
+    # 原串行实现（注释以保留参考）
+    # for sample in sample_list:
+    #     model = gp.read(lp_path)
+    #     t0 = time.perf_counter()
+    #     model.setParam("TimeLimit", agg_solve_time_limit)
+    #     model.Params.OutputFlag = 0
+    #     if constr_num == None:
+    #         constr_num = model.getAttr("NumConstrs")
+    #     conss = model.getConstrs()
+    #     sample_conss = [constr for idx,constr in enumerate(conss) if idx in sample]
+    #     utils.aggregate_constr_two_two(model,k,sample_conss)
+    #     model.optimize()
+    #     t1 = time.perf_counter()
+    #     agg_time = t1-t0
+    #     time_reduce = (time_orig - agg_time)/time_orig
+    #     time_reduce_list.append(time_reduce)
+    #     Vars = model.getVars()
+    #     vaule_dict = {var.VarName: var.X for var in Vars}
+    #     repair_model = gp.read(lp_path)
+    #     repair_model.setParam("Threads", Threads)
+    #     vaule_dict = repair_and_post_solve_func.repair(repair_model,vaule_dict,repair_method,lp_path)
+    #     optimal_solution = entry["solution"]
+    #     distance = sum(abs(vaule_dict[key]-optimal_solution[key]) for key in vaule_dict.keys())
+    #     constr_set_distance.append(distance)
+    #     constr_set_info.append({"constr_set":sample,"time_orig":time_orig,"agg_time":agg_time,"distance":distance})
+
+    # 并行实现：为每个 sample 使用独立进程处理
+   
+    # 构造参数列表并并行执行
+    ctx = multiprocessing.get_context("fork")
+    worker_args = [(lp_path, sample, entry, agg_solve_time_limit, Threads, seed, repair_method, k) for sample in sample_list]
+    with ctx.Pool(processes=num_procs) as pool:
+        results = pool.map(_gen_constr_label_worker, worker_args)
+
+    # 收集结果
+    for r in results:
+        constr_set_info.append({"constr_set": r.get("constr_set"), "time_orig": r.get("time_orig"), "agg_time": r.get("agg_time"), "distance": r.get("distance")})
+        if r.get("distance") is not None:
+            constr_set_distance.append(r.get("distance"))
+        # 保留 time_reduce_list 以便与原代码兼容
+        if r.get("time_reduce") is not None:
+            time_reduce_list.append(r.get("time_reduce"))
+
+    # 计算约束的分数
+    # score = {idx:{"total_distance":0,"cnt":0} for idx in range(constr_num)}
+    # for idx,sample in enumerate(sample_list):
+    #     for constr_idx in sample:
+    #             score[constr_idx]["total_distance"] += constr_set_distance[idx]
+    #             score[constr_idx]["cnt"] += 1
+    #
+    # score = [[key,val["total_distance"]/val["cnt"]] for key,val in score.items()]
+    # score.sort(key=lambda x:x[1])
+
+    # 计算约束的分数
+    # score = {idx:{"total_score":0,"cnt":0} for idx in range(constr_num)}
+    # for idx,sample in enumerate(sample_list):
+    #     for constr_idx in sample:
+    #         score[constr_idx]["total_score"] += time_reduce_list[idx]
+    #         score[constr_idx]["cnt"] += 1
+
+    # score = [[key,val["total_score"]/val["cnt"]] for key,val in score.items()]
+    # score.sort(key=lambda x:x[1],reverse=True)
+
+    return  constr_set_info
+
+
+
+
+def optimize(agg_solve_time_limit:int,Threads:int,seed,repair_method:str,sample_round:int,set_size:int):
+    random.seed(seed)
+    # task_name = "CA_750_1100_0.7"
+    task_name = "IS_1500_6"
+    # task_name = "CA_650_1000_0.7"
+    dataset_name = "train"
+    lp_dir_path = f"./instance/{dataset_name}/{task_name}"
+    os.makedirs(f"./parsed/{dataset_name}/{task_name}", exist_ok=True)
+    lp_files = [f for f in os.listdir(lp_dir_path) if f.endswith('.lp')]
+    lp_files.sort()  # 按文件名排序，确保顺序一致
+ 
+
+    # cache
+    # cache_dir = f"./cache/{dataset_name}"
+    # os.makedirs(cache_dir, exist_ok=True)
+    # cache_file_path = os.path.join(cache_dir,task_name+"_solving_cache_threads_0"+".json")
+    cache_file_path = utils.get_cache_file_path(dataset_name,task_name)
+    cache = {}
+    if os.path.exists(cache_file_path):
+        with open(cache_file_path, "r") as f:
+            cache = json.load(f)
+
+    cache = utils.get_solving_cache_mp(cache, cache_file_path, lp_dir_path,
+                                num_problems=len(lp_files), Threads=1,
+                                num_parallel_solves=20, time_limit=3600)
+    ## 原先的单线程求解
+    # cache = utils.load_optimal_cache(cache_file_path, lp_dir_path, solve_num=len(lp_files), Threads=Threads)
+
+    # dataset存放目录
+    dataset_dir = f"./dataset/{task_name}"
+    os.makedirs(dataset_dir,exist_ok=True)
+
+    #
+    BG_folder = "/BG"
+    # constr_score_folder = "/constr_score_multiplier_1"
+    solve_info_folder = "/solve_info"
+
+    for lp_file in lp_files:
+        solve_info_path = dataset_dir + solve_info_folder +f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle'
+        # if os.path.exists(solve_info_path):
+        #     # 不需要再求解一次了
+        #     with open(solve_info_path, "rb") as f:
+        #         solve_info = pickle.load(f)
+
+        #     solve_info['slack']=cache[lp_dir_path+"/"+lp_file]['slack']
+
+        #     with open(dataset_dir + solve_info_folder + f"/{lp_file.rsplit('.', 1)[0]}_solve_info" + '.pickle',
+        #                 'wb') as f:
+        #         pickle.dump(solve_info, f)
+        #         logging.info(f"update slack and save for {lp_file}")         
+
+        #     continue
+
+        # 读取问题
+        lp_path = os.path.join(lp_dir_path, lp_file)
+        model = gp.read(lp_path)
+
+
+        # obj sense
+        obj_type = model.ModelSense
+        if obj_type == GRB.MINIMIZE:
+            obj_type = 'minimize'
+        elif obj_type == GRB.MAXIMIZE:
+            obj_type = 'maximize'
+        else:
+            raise Exception("unknown obj sense")
+
+        ## 描述
+        # n represents the number of decision variables
+        # m represents the number of constraints
+        # k[i] represents the number of decision variables in the ith constraint
+        # site[i][j] represents the decision variable in the jth position of the ith constraint
+        # value[i][j] represents the coefficient of the jth decision variable in the ith constraint
+        # constraint[i] represents the right-hand side value of the ith constraint
+        # constraint_type[i] represents the type of the ith constraint, where 1 is <=, 2 is >=
+        # coefficient[i] represents the coefficient of the ith decision variable in the objective function
+        # lower_bound[i] represents the lower bound of the range for the ith decision variable.
+        # upper_bound[i] represents the upper bound of the range for the ith decision variable.
+        # value_type[i] represents the type of the ith decision variable, 'B' for binary variable, 'I' for integer variable, 'C' for continuous variable.
+
+
+        # 获取变量信息
+        vars = model.getVars()
+        n = len(vars)
+        coefficient = [v.obj for v in vars]
+        lower_bound = [v.lb for v in vars]
+        upper_bound = [v.ub for v in vars]
+        value_type = [{'B': 'B', 'I': 'I', 'C': 'C'}.get(v.vtype, 'C') for v in vars]
+
+        # 获取约束信息
+        constrs = model.getConstrs()
+        m = len(constrs)
+        sense_map = {'<': 1, '>': 2, '=': 3}
+        k, site, value, constraint, constraint_type = [], [], [], [], []
+        # k和constr_degree都表示约束中变量数，也就是约束的度
+        # site:约束中的变量下标，如[1,2,13,146]
+        # value：约束中的变量系数，如[1,1,1,1]
+        constr_degree = []
+        variable_degree = [0 for i in range(n)]
+        for c in constrs:
+            row = model.getRow(c)
+            vars_in_row = [row.getVar(idx) for idx in range(row.size())]
+            coeffs = [row.getCoeff(idx) for idx in range(row.size())]
+
+            k.append(len(vars_in_row))
+            site.append([v.index for v in vars_in_row]) # 变量全局下标，例如x1、x2、x13、x416下标为[1,2,13,146]
+            value.append([float(co) for co in coeffs])
+            constraint.append(c.RHS)
+            constraint_type.append(sense_map[c.Sense])
+            constr_degree.append(row.size()) # 度
+
+            for idx in range(row.size()):
+                var = row.getVar(idx)
+                variable_degree[var.index] += 1
+
+        norm_variable_degree = z_score_normalize(variable_degree)
+        norm_constr_degree = z_score_normalize(constr_degree)
+
+
+
+        # 这个函数是用来得到最优解
+        # optimal_solution = Gurobi_solver(n, m, k, site, value, constraint, constraint_type, coefficient, time, obj_type, lower_bound, upper_bound, value_type)
+
+        # Bipartite graph encoding
+        variable_features = []
+        constraint_features = []
+        edge_indices = [[], []]  # [约束index,变量index]，其实就是稀疏的邻接矩阵
+        edge_features = [] # 约束中变量系数，与edge_indices一一对应。例如edge_indices=[[1,10],...,]表示约束1中存在变量10，系数为edge_features=[1,...,]
+        # variable_features:[目标系数，变量标识[0,1]（区别于约束），变量类型，随机特征，度]
+        # todo 再加：在所有变量中的平均系数、度、最大系数、最小系数、每个变量出现顺序的二进制编码,变量上下界？
+
+        # constraint_features：[右端项，约束类型（sense），随机特征，度]
+
+
+        #print(value_type)
+        # 归一化
+        norm_coeff = z_score_normalize(coefficient)
+        ## 变量原始特征
+        for i in range(n):
+            now_variable_features = []
+            # now_variable_features.append(coefficient[i])
+            now_variable_features.append(norm_coeff[i]) # 归一化的系数
+            now_variable_features.append(0) #
+            now_variable_features.append(1) # [0,1]代表是变量
+
+            # 变量类型
+            if(value_type[i] == 'C'):
+                now_variable_features.append(0)
+            else:
+                now_variable_features.append(1)
+            # 随机特征
+            now_variable_features.append(random.random())
+
+            # 变量的度
+            now_variable_features.append(norm_variable_degree[i])
+
+            # 还差：在约束中的平均系数，最大系数，最小系数
+            variable_features.append(now_variable_features)
+
+        # 约束原始特征
+        for i in range(m):
+            now_constraint_features = []
+            now_constraint_features.append(constraint[i]) # 右端项
+
+            # 约束类型
+            if(constraint_type[i] == 1):
+                now_constraint_features.append(1)
+                now_constraint_features.append(0)
+                now_constraint_features.append(0)
+            if(constraint_type[i] == 2):
+                now_constraint_features.append(0)
+                now_constraint_features.append(1)
+                now_constraint_features.append(0)
+            if(constraint_type[i] == 3):
+                now_constraint_features.append(0)
+                now_constraint_features.append(0)
+                now_constraint_features.append(1)
+            # 随机特征
+            now_constraint_features.append(random.random())
+
+            # 度
+            now_constraint_features.append(norm_constr_degree[i])
+
+            # pos_emb
+            # pos_emb = decimal_to_binary_list(m,i)
+            # now_constraint_features.extend(pos_emb)
+            constraint_features.append(now_constraint_features)
+        
+        for i in range(m):
+            for j in range(k[i]):
+                edge_indices[0].append(i)
+                edge_indices[1].append(site[i][j])
+                edge_features.append([value[i][j]])
+
+
+        ## 约束标签采集
+        # sample_round = 40 # 采样
+        # k = 50 # 约束子集大小
+        # constr_score, subset_and_timereduce = gen_constr_label(lp_path, cache,sample_round,k)
+        # constr_score, constr_subset_and_timereduce = gen_constr_label(lp_path, cache,sample_round,k,agg_solve_time_limit,Threads,seed,repair_method)
+        constr_subset_info = gen_constr_label(lp_path, cache,sample_round,set_size,agg_solve_time_limit,Threads,seed,repair_method)
+        avg_distance = sum([set_info["distance"] for set_info in constr_subset_info])/len(constr_subset_info)
+        print("avg_distance:",avg_distance)
+        # 保存
+        os.makedirs(dataset_dir + BG_folder,exist_ok=True)
+        # os.makedirs(dataset_dir + constr_score_folder, exist_ok=True)
+        os.makedirs(dataset_dir + solve_info_folder, exist_ok=True)
+        with open(dataset_dir + BG_folder + f"/{lp_file.rsplit('.',1)[0]}_BG" + '.pickle', 'wb') as f:
+                pickle.dump([variable_features, constraint_features, edge_indices, edge_features], f)
+        # with open(dataset_dir + constr_score_folder + f"/{lp_file.rsplit('.',1)[0]}_constr_score" + '.pickle', 'wb') as f:
+        #         pickle.dump([constr_score], f)
+        # with open(dataset_dir + solve_info_folder + f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle', 'wb') as f:
+        #         pickle.dump([subset_and_timereduce], f)
+
+        solve_info = {'random_set': constr_subset_info, 'slack': cache[lp_dir_path+"/"+lp_file]['slack']}
+        with open(dataset_dir + solve_info_folder + f"/{lp_file.rsplit('.',1)[0]}_solve_info" + '.pickle', 'wb') as f:
+                pickle.dump(solve_info, f)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    # parser.add_argument('--time', type = int, default = 10, help = 'Running wall-clock time.')
+    # parser.add_argument("--number", type = int, default = 10, help = 'The number of instances.')
+    parser.add_argument("--agg_solve_time_limit", type = int, default = 5, help = '聚合问题求解时间上限')
+    parser.add_argument("--Threads", type = int, default = 1, help = 'gurobi线程数')
+    parser.add_argument("--seed", type = int, default = '517', help = '种子')
+    parser.add_argument("--repair_method", type = str, default = 'subproblem', help = '可行性修复方法')
+    parser.add_argument("--sample_round", type = int, default = 50, help = '约束子集采样次数')
+    # parser.add_argument("--sample_round", type = int, default = 50, help = '约束子集采样次数')
+    parser.add_argument("--set_size", type = int, default = 100, help = '约束子集大小')
+
+    return parser.parse_args()
+
+
+
+if __name__ == '__main__':
+    args = parse_args() # 用不上
+    #print(vars(args))
+    optimize(**vars(args))
+

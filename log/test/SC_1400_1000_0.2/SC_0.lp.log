@@ -1,0 +1,76 @@
+
+Gurobi 11.0.3 (linux64) logging started Wed Dec 17 16:09:36 2025
+
+Set parameter LogFile to value "./log/test/SC_1400_1000_0.2/SC_0.lp.log"
+Set parameter TimeLimit to value 3600
+Gurobi Optimizer version 11.0.3 build v11.0.3rc0 (linux64 - "Ubuntu 22.04.5 LTS")
+
+CPU model: AMD Ryzen 9 9900X 12-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 12 physical cores, 24 logical processors, using up to 24 threads
+
+Optimize a model with 1400 rows, 1000 columns and 280000 nonzeros
+Model fingerprint: 0x7122b323
+Variable types: 0 continuous, 1000 integer (1000 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [1e+00, 1e+02]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 1e+00]
+Found heuristic solution: objective 1458.0000000
+Presolve time: 0.61s
+Presolved: 1400 rows, 1000 columns, 280000 nonzeros
+Variable types: 0 continuous, 1000 integer (1000 binary)
+Found heuristic solution: objective 225.0000000
+
+Root relaxation: objective 3.512663e+01, 293 iterations, 0.02 seconds (0.06 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0   35.12663    0   56  225.00000   35.12663  84.4%     -    0s
+H    0     0                     183.0000000   35.12663  80.8%     -    0s
+H    0     0                     109.0000000   35.12663  67.8%     -    0s
+     0     0   35.43447    0   60  109.00000   35.43447  67.5%     -    1s
+     0     0   35.43447    0   56  109.00000   35.43447  67.5%     -    1s
+H    0     0                      54.0000000   35.43447  34.4%     -    2s
+H    0     0                      50.0000000   40.76181  18.5%     -    2s
+     0     0   40.78292    0   59   50.00000   40.78292  18.4%     -    2s
+     0     0   40.78292    0   56   50.00000   40.78292  18.4%     -    2s
+     0     0   40.78292    0   59   50.00000   40.78292  18.4%     -    2s
+     0     0   40.78292    0   57   50.00000   40.78292  18.4%     -    2s
+H    0     0                      49.0000000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   62   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   63   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   62   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   61   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   62   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   59   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   61   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   60   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   60   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   61   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   61   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   62   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   60   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   61   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   62   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   63   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   63   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   62   49.00000   40.78292  16.8%     -    2s
+     0     0   40.78292    0   62   49.00000   40.78292  16.8%     -    2s
+     0     2   40.78292    0   62   49.00000   40.78292  16.8%     -    3s
+
+Cutting planes:
+  Gomory: 3
+  MIR: 32
+  Zero half: 5
+
+Explored 4311 nodes (147964 simplex iterations) in 4.13 seconds (11.36 work units)
+Thread count was 24 (of 24 available processors)
+
+Solution count 7: 49 50 54 ... 1458
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 4.900000000000e+01, best bound 4.900000000000e+01, gap 0.0000%
+
+User-callback calls 10238, time in user-callback 0.01 sec

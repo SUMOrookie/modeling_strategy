@@ -1,0 +1,191 @@
+
+Gurobi 11.0.3 (linux64) logging started Tue Mar  3 10:35:06 2026
+
+Set parameter LogFile to value "/home/cc/code/modeling_strategy/predictandsearch/logs/CA_750_1100_0.7/CA_750_1100_0.7_GRB_Predect&Search/CA_1.lp.log"
+Gurobi Optimizer version 11.0.3 build v11.0.3rc0 (linux64 - "Ubuntu 22.04.5 LTS")
+
+CPU model: AMD Ryzen 9 9900X 12-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 12 physical cores, 24 logical processors, using up to 24 threads
+
+Optimize a model with 2038 rows, 1180 columns and 6556 nonzeros
+Model fingerprint: 0xaff201f5
+Variable types: 430 continuous, 750 integer (750 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [1e+00, 2e+03]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 1e+02]
+Found heuristic solution: objective 32722.637727
+Presolve removed 1052 rows and 497 columns
+Presolve time: 0.01s
+Presolved: 986 rows, 683 columns, 4671 nonzeros
+Found heuristic solution: objective 40200.691796
+Variable types: 0 continuous, 683 integer (683 binary)
+Found heuristic solution: objective 41147.705785
+
+Root relaxation: objective 5.154306e+04, 2697 iterations, 0.12 seconds (0.27 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 51543.0562    0  467 41147.7058 51543.0562  25.3%     -    0s
+H    0     0                    41194.696455 51543.0562  25.1%     -    0s
+H    0     0                    41290.917182 51538.6574  24.8%     -    0s
+     0     0 51428.8673    0  470 41290.9172 51428.8673  24.6%     -    0s
+H    0     0                    42368.992840 51427.2340  21.4%     -    0s
+     0     0 51362.7255    0  473 42368.9928 51362.7255  21.2%     -    0s
+H    0     0                    42442.290436 51362.7255  21.0%     -    0s
+H    0     0                    42957.374232 51362.7255  19.6%     -    0s
+     0     0 51220.3055    0  476 42957.3742 51220.3055  19.2%     -    0s
+     0     0 51220.3055    0  477 42957.3742 51220.3055  19.2%     -    0s
+     0     0 51220.3055    0  476 42957.3742 51220.3055  19.2%     -    0s
+     0     0 50993.8315    0  475 42957.3742 50993.8315  18.7%     -    0s
+     0     0 50993.8315    0  477 42957.3742 50993.8315  18.7%     -    0s
+     0     0 50993.8315    0  475 42957.3742 50993.8315  18.7%     -    0s
+     0     0 50992.9183    0  478 42957.3742 50992.9183  18.7%     -    0s
+H    0     0                    43689.177554 50992.9183  16.7%     -    3s
+     0     2 50992.9183    0  478 43689.1776 50992.9183  16.7%     -    3s
+H   24    28                    43726.135826 50992.9183  16.6%   529    3s
+H   29    40                    43729.626299 50992.9183  16.6%   533    4s
+H   36    40                    43813.982014 50992.9183  16.4%   503    4s
+H   43    52                    44071.271804 50992.9183  15.7%   495    4s
+H  100   113                    44294.688061 50992.9183  15.1%   425    7s
+H  102   113                    44494.646742 50992.9183  14.6%   425    7s
+H  105   113                    44621.665931 50992.9183  14.3%   420    7s
+H  109   113                    44785.734795 50992.9183  13.9%   413    7s
+H  112   134                    44879.048618 50992.9183  13.6%   410    7s
+H  163   187                    44887.361256 50992.9183  13.6%   365    7s
+H  188   187                    44909.827989 50992.9183  13.5%   339    7s
+H  290   248                    44949.139390 50992.9183  13.4%   300    7s
+H  294   248                    45084.057926 50992.9183  13.1%   299    7s
+   297   266 45717.1315   20  276 45084.0579 50992.9183  13.1%   299   10s
+H  331   266                    45124.150428 50992.9183  13.0%   289   10s
+  2403  1588 46472.3516   41  478 45124.1504 50191.5817  11.2%   219   15s
+  2414  1595 46915.2101   22  480 45124.1504 50191.5817  11.2%   218   20s
+
+Gurobi 11.0.3 (linux64) logging started Tue Mar  3 10:54:39 2026
+
+Set parameter LogFile to value "/home/cc/code/modeling_strategy/predictandsearch/logs/CA_750_1100_0.7/CA_750_1100_0.7_GRB_Predect&Search/CA_1.lp.log"
+Gurobi Optimizer version 11.0.3 build v11.0.3rc0 (linux64 - "Ubuntu 22.04.5 LTS")
+
+CPU model: AMD Ryzen 9 9900X 12-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 12 physical cores, 24 logical processors, using up to 24 threads
+
+Optimize a model with 2038 rows, 1180 columns and 6556 nonzeros
+Model fingerprint: 0xaff201f5
+Variable types: 430 continuous, 750 integer (750 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [1e+00, 2e+03]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 1e+02]
+Found heuristic solution: objective 32722.637727
+Presolve removed 1052 rows and 497 columns
+Presolve time: 0.01s
+Presolved: 986 rows, 683 columns, 4671 nonzeros
+Found heuristic solution: objective 40200.691796
+Variable types: 0 continuous, 683 integer (683 binary)
+Found heuristic solution: objective 41147.705785
+
+Root relaxation: objective 5.154306e+04, 2697 iterations, 0.12 seconds (0.27 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 51543.0562    0  467 41147.7058 51543.0562  25.3%     -    0s
+H    0     0                    41194.696455 51543.0562  25.1%     -    0s
+H    0     0                    41290.917182 51538.6574  24.8%     -    0s
+     0     0 51428.8673    0  470 41290.9172 51428.8673  24.6%     -    0s
+H    0     0                    42368.992840 51427.2340  21.4%     -    0s
+     0     0 51362.7255    0  473 42368.9928 51362.7255  21.2%     -    0s
+H    0     0                    42442.290436 51362.7255  21.0%     -    0s
+H    0     0                    42957.374232 51362.7255  19.6%     -    0s
+     0     0 51220.3055    0  476 42957.3742 51220.3055  19.2%     -    0s
+     0     0 51220.3055    0  477 42957.3742 51220.3055  19.2%     -    0s
+     0     0 51220.3055    0  476 42957.3742 51220.3055  19.2%     -    0s
+     0     0 50993.8315    0  475 42957.3742 50993.8315  18.7%     -    0s
+     0     0 50993.8315    0  477 42957.3742 50993.8315  18.7%     -    0s
+     0     0 50993.8315    0  475 42957.3742 50993.8315  18.7%     -    0s
+     0     0 50992.9183    0  478 42957.3742 50992.9183  18.7%     -    0s
+H    0     0                    43689.177554 50992.9183  16.7%     -    3s
+     0     2 50992.9183    0  478 43689.1776 50992.9183  16.7%     -    3s
+H   24    28                    43726.135826 50992.9183  16.6%   529    3s
+H   29    40                    43729.626299 50992.9183  16.6%   533    4s
+H   36    40                    43813.982014 50992.9183  16.4%   503    4s
+H   43    52                    44071.271804 50992.9183  15.7%   495    4s
+H  100   113                    44294.688061 50992.9183  15.1%   425    7s
+H  102   113                    44494.646742 50992.9183  14.6%   425    7s
+H  105   113                    44621.665931 50992.9183  14.3%   420    7s
+H  109   113                    44785.734795 50992.9183  13.9%   413    7s
+H  112   134                    44879.048618 50992.9183  13.6%   410    7s
+H  163   187                    44887.361256 50992.9183  13.6%   365    7s
+H  188   187                    44909.827989 50992.9183  13.5%   339    7s
+H  290   248                    44949.139390 50992.9183  13.4%   300    8s
+H  294   248                    45084.057926 50992.9183  13.1%   299    8s
+   297   266 45717.1315   20  276 45084.0579 50992.9183  13.1%   299   10s
+H  331   266                    45124.150428 50992.9183  13.0%   289   10s
+  2403  1588 46472.3516   41  478 45124.1504 50191.5817  11.2%   219   16s
+  2414  1595 46915.2101   22  480 45124.1504 50191.5817  11.2%   218   20s
+  2622  1756 47762.6637   24  360 45124.1504 50191.5817  11.2%   233   26s
+  5225  2517 46802.7219   43  362 45124.1504 50191.5817  11.2%   219   30s
+  8596  3800 45528.9564   65  317 45124.1504 49478.6447  9.65%   209   36s
+ 10560  5034 47326.3785   49  402 45124.1504 48926.7803  8.43%   207   40s
+
+Gurobi 11.0.3 (linux64) logging started Tue Mar  3 11:00:33 2026
+
+Set parameter LogFile to value "/home/cc/code/modeling_strategy/predictandsearch/logs/CA_750_1100_0.7/CA_750_1100_0.7_GRB_Predect&Search/CA_1.lp.log"
+Gurobi Optimizer version 11.0.3 build v11.0.3rc0 (linux64 - "Ubuntu 22.04.5 LTS")
+
+CPU model: AMD Ryzen 9 9900X 12-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 12 physical cores, 24 logical processors, using up to 24 threads
+
+Optimize a model with 2038 rows, 1180 columns and 6556 nonzeros
+Model fingerprint: 0xdf0f695a
+Variable types: 430 continuous, 750 integer (750 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [1e+00, 2e+03]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+01]
+Found heuristic solution: objective 32722.637727
+Presolve removed 1052 rows and 497 columns
+Presolve time: 0.01s
+Presolved: 986 rows, 683 columns, 4671 nonzeros
+Found heuristic solution: objective 39986.058464
+Variable types: 0 continuous, 683 integer (683 binary)
+Found heuristic solution: objective 40928.573512
+
+Root relaxation: objective 5.060290e+04, 1632 iterations, 0.05 seconds (0.11 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 50602.9000    0  394 40928.5735 50602.9000  23.6%     -    0s
+H    0     0                    41343.260890 50602.9000  22.4%     -    0s
+     0     0 50405.2954    0  410 41343.2609 50405.2954  21.9%     -    0s
+H    0     0                    41480.607092 50405.2954  21.5%     -    0s
+     0     0 50348.9386    0  402 41480.6071 50348.9386  21.4%     -    0s
+H    0     0                    41504.192405 50348.9386  21.3%     -    0s
+     0     0 50348.9386    0  403 41504.1924 50348.9386  21.3%     -    0s
+     0     0 50344.2811    0  406 41504.1924 50344.2811  21.3%     -    0s
+     0     0 50344.0670    0  407 41504.1924 50344.0670  21.3%     -    0s
+H    0     0                    41775.136562 50344.0670  20.5%     -    0s
+H    0     0                    42962.226228 50102.1859  16.6%     -    0s
+     0     0 50102.1859    0  404 42962.2262 50102.1859  16.6%     -    0s
+H    0     0                    43122.623424 50102.1859  16.2%     -    0s
+H    0     0                    43443.249300 50102.1859  15.3%     -    0s
+     0     0 50094.9481    0  404 43443.2493 50094.9481  15.3%     -    0s
+H    0     0                    44760.156205 50094.9481  11.9%     -    2s
+     0     2 50094.9481    0  404 44760.1562 50094.9481  11.9%     -    2s
+H   11    16                    44873.204293 50090.2230  11.6%   455    2s
+H   18    28                    44880.644555 49943.8094  11.3%   483    2s
+H   19    28                    44896.667948 49943.8094  11.2%   471    2s
+H   27    40                    44904.108211 49862.9527  11.0%   459    2s
+H   30    40                    44920.491553 49862.9527  11.0%   453    2s
+H   31    40                    45500.768235 49862.9527  9.59%   449    2s
+H   40    52                    45574.927292 49862.9527  9.41%   402    2s
+H   78    80                    45640.506087 49862.9527  9.25%   333    2s
+H  168   139                    45732.416853 49862.9527  9.03%   267    3s
+   400   265 48707.2034    6  349 45732.4169 49709.1845  8.70%   220    5s
+   893   535     cutoff   12      45732.4169 49098.5989  7.36%   204   10s
+  3261  1408 47630.6941   14  404 45732.4169 48057.0944  5.08%   173   15s

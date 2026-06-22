@@ -1,0 +1,132 @@
+
+Gurobi 11.0.3 (linux64) logging started Wed Nov 12 11:19:21 2025
+
+Set parameter LogFile to value "./log/train/CA_500_600_threads_0/CA_16.lp.log"
+Set parameter TimeLimit to value 3600
+Gurobi Optimizer version 11.0.3 build v11.0.3rc0 (linux64 - "Ubuntu 22.04.5 LTS")
+
+CPU model: AMD Ryzen 9 9900X 12-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 12 physical cores, 24 logical processors, using up to 24 threads
+
+Optimize a model with 607 rows, 600 columns and 2948 nonzeros
+Model fingerprint: 0xf8c9db7e
+Variable types: 0 continuous, 600 integer (600 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [2e+00, 1e+03]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 1e+00]
+Found heuristic solution: objective 20213.564539
+Presolve removed 40 rows and 77 columns
+Presolve time: 0.01s
+Presolved: 567 rows, 523 columns, 2895 nonzeros
+Found heuristic solution: objective 24098.917086
+Variable types: 0 continuous, 523 integer (523 binary)
+Found heuristic solution: objective 24968.206611
+
+Root relaxation: objective 3.049498e+04, 1272 iterations, 0.03 seconds (0.07 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 30494.9795    0  296 24968.2066 30494.9795  22.1%     -    0s
+H    0     0                    25044.187808 30494.9795  21.8%     -    0s
+H    0     0                    25113.024073 30494.9795  21.4%     -    0s
+H    0     0                    25114.750210 30478.6443  21.4%     -    0s
+H    0     0                    26789.521257 30386.5121  13.4%     -    0s
+     0     0 30386.5121    0  298 26789.5213 30386.5121  13.4%     -    0s
+     0     0 30158.3125    0  306 26789.5213 30158.3125  12.6%     -    0s
+     0     0 30123.9937    0  310 26789.5213 30123.9937  12.4%     -    0s
+     0     0 30123.9937    0  310 26789.5213 30123.9937  12.4%     -    0s
+H    0     0                    26972.652183 30123.9937  11.7%     -    0s
+     0     2 30123.9937    0  310 26972.6522 30123.9937  11.7%     -    0s
+H   29    40                    27160.959831 30066.4337  10.7%   299    0s
+H   64    86                    27531.354446 30066.4337  9.21%   223    0s
+H   67    86                    27565.718518 30066.4337  9.07%   220    0s
+H   82    86                    27733.995631 30066.4337  8.41%   204    0s
+H  131   135                    27916.463366 30066.4337  7.70%   172    0s
+H  178   123                    28015.480814 30066.4337  7.32%   151    0s
+H  197   132                    28054.838801 29999.5730  6.93%   147    0s
+* 3254  1173              13    28149.345942 29040.0028  3.16%   103    1s
+ 11320  1348 28202.3273   34  245 28149.3459 28677.9008  1.88%   100    5s
+
+Cutting planes:
+  Gomory: 2
+  Clique: 17
+  Zero half: 4
+
+Explored 17255 nodes (1612586 simplex iterations) in 6.13 seconds (14.86 work units)
+Thread count was 24 (of 24 available processors)
+
+Solution count 10: 28149.3 28054.8 28015.5 ... 26789.5
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 2.814934594208e+04, best bound 2.814934594208e+04, gap 0.0000%
+
+User-callback calls 36234, time in user-callback 0.02 sec
+
+Gurobi 11.0.3 (linux64) logging started Wed Nov 12 14:39:53 2025
+
+Set parameter LogFile to value "./log/train/CA_500_600_threads_0/CA_16.lp.log"
+Set parameter TimeLimit to value 3600
+Gurobi Optimizer version 11.0.3 build v11.0.3rc0 (linux64 - "Ubuntu 22.04.5 LTS")
+
+CPU model: AMD Ryzen 9 9900X 12-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 12 physical cores, 24 logical processors, using up to 24 threads
+
+Optimize a model with 607 rows, 600 columns and 2948 nonzeros
+Model fingerprint: 0xf8c9db7e
+Variable types: 0 continuous, 600 integer (600 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [2e+00, 1e+03]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 1e+00]
+Found heuristic solution: objective 20213.564539
+Presolve removed 40 rows and 77 columns
+Presolve time: 0.01s
+Presolved: 567 rows, 523 columns, 2895 nonzeros
+Found heuristic solution: objective 24098.917086
+Variable types: 0 continuous, 523 integer (523 binary)
+Found heuristic solution: objective 24968.206611
+
+Root relaxation: objective 3.049498e+04, 1272 iterations, 0.03 seconds (0.07 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 30494.9795    0  296 24968.2066 30494.9795  22.1%     -    0s
+H    0     0                    25044.187808 30494.9795  21.8%     -    0s
+H    0     0                    25113.024073 30494.9795  21.4%     -    0s
+H    0     0                    25114.750210 30478.6443  21.4%     -    0s
+H    0     0                    26789.521257 30386.5121  13.4%     -    0s
+     0     0 30386.5121    0  298 26789.5213 30386.5121  13.4%     -    0s
+     0     0 30158.3125    0  306 26789.5213 30158.3125  12.6%     -    0s
+     0     0 30123.9937    0  310 26789.5213 30123.9937  12.4%     -    0s
+     0     0 30123.9937    0  310 26789.5213 30123.9937  12.4%     -    0s
+H    0     0                    26972.652183 30123.9937  11.7%     -    0s
+     0     2 30123.9937    0  310 26972.6522 30123.9937  11.7%     -    0s
+H   29    40                    27160.959831 30066.4337  10.7%   299    0s
+H   64    86                    27531.354446 30066.4337  9.21%   223    0s
+H   67    86                    27565.718518 30066.4337  9.07%   220    0s
+H   82    86                    27733.995631 30066.4337  8.41%   204    0s
+H  131   135                    27916.463366 30066.4337  7.70%   172    0s
+H  178   123                    28015.480814 30066.4337  7.32%   151    0s
+H  197   132                    28054.838801 29999.5730  6.93%   147    0s
+* 3254  1173              13    28149.345942 29040.0028  3.16%   103    1s
+ 14021  1063     cutoff   34      28149.3459 28552.4191  1.43%  97.3    5s
+
+Cutting planes:
+  Gomory: 2
+  Clique: 17
+  Zero half: 4
+
+Explored 17255 nodes (1612586 simplex iterations) in 5.51 seconds (14.86 work units)
+Thread count was 24 (of 24 available processors)
+
+Solution count 10: 28149.3 28054.8 28015.5 ... 26789.5
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 2.814934594208e+04, best bound 2.814934594208e+04, gap 0.0000%
+
+User-callback calls 36198, time in user-callback 0.02 sec

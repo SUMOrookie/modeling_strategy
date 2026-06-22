@@ -1,0 +1,10 @@
+{
+  "CA": {
+    "n_bids": 1500,
+    "n_items": 1700,
+    "add_item_prob": 0.8
+  },
+  "IS": {
+    "n_nodes": 300
+  }
+}

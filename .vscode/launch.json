@@ -1,0 +1,31 @@
+// {
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "name": "Debug Streamlit App",
+//             "type": "debugpy",
+//             "request": "launch",
+//             "module": "streamlit",
+//             "args": [
+//                 "run",
+//                 "${file}",
+//                 "--server.port", "8501",
+//                 "--server.headless", "true"
+//             ],
+//             "justMyCode": true
+//         }
+//     ]
+// }
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

@@ -1,0 +1,78 @@
+
+Gurobi 11.0.3 (linux64) logging started Thu Dec 18 13:59:32 2025
+
+Set parameter LogFile to value "./log/test/SC_300_1200_0.15_30/SC_0.lp.log"
+Set parameter TimeLimit to value 3600
+Gurobi Optimizer version 11.0.3 build v11.0.3rc0 (linux64 - "Ubuntu 22.04.5 LTS")
+
+CPU model: AMD Ryzen 9 9900X 12-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 12 physical cores, 24 logical processors, using up to 24 threads
+
+Optimize a model with 300 rows, 1200 columns and 54000 nonzeros
+Model fingerprint: 0x69f22fef
+Variable types: 0 continuous, 1200 integer (1200 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [1e+00, 3e+01]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 1e+00]
+Found heuristic solution: objective 253.0000000
+Presolve time: 0.04s
+Presolved: 300 rows, 1200 columns, 54000 nonzeros
+Variable types: 0 continuous, 1200 integer (1200 binary)
+Found heuristic solution: objective 159.0000000
+
+Root relaxation: objective 1.270337e+01, 201 iterations, 0.01 seconds (0.02 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0   12.70337    0   61  159.00000   12.70337  92.0%     -    0s
+H    0     0                     115.0000000   12.70337  89.0%     -    0s
+H    0     0                      37.0000000   12.70337  65.7%     -    0s
+     0     0   12.75026    0   67   37.00000   12.75026  65.5%     -    0s
+H    0     0                      18.0000000   12.75026  29.2%     -    0s
+     0     0   13.98731    0   60   18.00000   13.98731  22.3%     -    0s
+     0     0   14.10526    0   60   18.00000   14.10526  21.6%     -    0s
+     0     0   14.10526    0   61   18.00000   14.10526  21.6%     -    0s
+     0     0   14.10526    0   66   18.00000   14.10526  21.6%     -    0s
+     0     0   14.10526    0   65   18.00000   14.10526  21.6%     -    0s
+     0     0   14.10526    0   66   18.00000   14.10526  21.6%     -    0s
+     0     0   14.10526    0   66   18.00000   14.10526  21.6%     -    0s
+     0     0   14.10526    0   60   18.00000   14.10526  21.6%     -    0s
+     0     0   14.10526    0   62   18.00000   14.10526  21.6%     -    0s
+     0     0   14.10526    0   62   18.00000   14.10526  21.6%     -    0s
+     0     0   14.10526    0   62   18.00000   14.10526  21.6%     -    0s
+H    0     0                      17.0000000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   64   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   64   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   63   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   63   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   66   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   61   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   67   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   62   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   63   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   61   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   64   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   66   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   63   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   63   17.00000   14.10526  17.0%     -    0s
+     0     0   14.10526    0   63   17.00000   14.10526  17.0%     -    0s
+     0     2   14.10526    0   63   17.00000   14.10526  17.0%     -    0s
+* 1373   153              14      16.0000000   15.15885  5.26%  30.7    0s
+
+Cutting planes:
+  Gomory: 1
+  MIR: 29
+  Zero half: 5
+
+Explored 1420 nodes (44623 simplex iterations) in 0.94 seconds (2.32 work units)
+Thread count was 24 (of 24 available processors)
+
+Solution count 8: 16 17 18 ... 253
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 1.600000000000e+01, best bound 1.600000000000e+01, gap 0.0000%
+
+User-callback calls 3610, time in user-callback 0.00 sec
