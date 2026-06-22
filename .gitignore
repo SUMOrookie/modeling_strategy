@@ -14,3 +14,9 @@ predictandsearch/result
 parsed
 parameters
 relax_results
+__pycache__
+predictandsearch/__pycache__
+predictandsearch/logs
+predictandsearch/models
+predictandsearch/pretrain
+predictandsearch/train_logs
